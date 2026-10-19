@@ -1,0 +1,14 @@
+import {readFile,writeFile} from 'node:fs/promises';
+const read=name=>readFile(new URL(name,import.meta.url),'utf8');
+const plain=source=>source.replace(/^import[^\n]*\n/gm,'').replace(/^export /gm,'');
+const core=(await Promise.all(['geometry','curves','optimizer'].map(name=>read(`dist/${name}.js`)))).map(plain).join('\n');
+const worker=core+'\n'+plain(await read('dist/worker.js'));
+const app=core+'\nglobalThis.CURVE_WORKER_SOURCE='+JSON.stringify(worker)+';\n'+plain(await read('dist/layout.js'))+'\n'+plain(await read('dist/view3d.js'))+'\n'+plain(await read('dist/app.js'));
+const css=(await read('dist/style.css')).replace(/^@import[^;]+;\s*/, '');
+const html=(await read('template.html')).replace('<link rel="stylesheet" href="style.css">',()=>`<style>${css}</style>`).replace('<script type="module" src="app.js"></script>',()=>`<script>\n(()=>{\n${app}\n})();\n</script>`);
+await writeFile(new URL('dist/index.html',import.meta.url),html);
+await writeFile(new URL('index.html',import.meta.url),html);
+console.log('Built self-contained calculator: dist/index.html and index.html');
+
+
+
