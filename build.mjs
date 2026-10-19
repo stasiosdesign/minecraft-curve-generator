@@ -5,7 +5,8 @@ const core=(await Promise.all(['geometry','curves','optimizer'].map(name=>read(`
 const worker=core+'\n'+plain(await read('dist/worker.js'));
 const app=core+'\nglobalThis.CURVE_WORKER_SOURCE='+JSON.stringify(worker)+';\n'+plain(await read('dist/layout.js'))+'\n'+plain(await read('dist/view3d.js'))+'\n'+plain(await read('dist/app.js'));
 const css=(await read('dist/style.css')).replace(/^@import[^;]+;\s*/, '');
-const html=(await read('template.html')).replace('<link rel="stylesheet" href="style.css">',()=>`<style>${css}</style>`).replace('<script type="module" src="app.js"></script>',()=>`<script>\n(()=>{\n${app}\n})();\n</script>`);
+const portrait='data:image/png;base64,'+(await readFile(new URL('dist/assets/susan-boyle.png',import.meta.url))).toString('base64');
+const html=(await read('template.html')).replaceAll('assets/susan-boyle.png',portrait).replace('<link rel="stylesheet" href="style.css">',()=>`<style>${css}</style>`).replace('<script type="module" src="app.js"></script>',()=>`<script>\n(()=>{\n${app}\n})();\n</script>`);
 await writeFile(new URL('dist/index.html',import.meta.url),html);
 await writeFile(new URL('index.html',import.meta.url),html);
 console.log('Built self-contained calculator: dist/index.html and index.html');

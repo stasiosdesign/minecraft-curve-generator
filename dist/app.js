@@ -82,3 +82,6 @@ controls();calculate();
 
 
 
+$('#portrait-trigger').onclick=()=>$('#portrait-dialog').showModal();
+$('#portrait-close').onclick=()=>$('#portrait-dialog').close();
+$('#portrait-dialog').onclick=e=>{if(e.target===$('#portrait-dialog')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}};
