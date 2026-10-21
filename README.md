@@ -86,3 +86,6 @@ Browser checks covered 1440×900, 390×844, 320×568 and 667×375, including pan
 
 The middle handle moves in both axes. Dragging it sideways switches to Custom; Bend position controls its horizontal location (10–90% of the span). A smooth monotone parameter mapping preserves the endpoints and moves the bend without a join or loop. Arrow keys also move the focused handle.
 
+
+Symmetric references are centred within their enclosing block grid without changing their mathematical shape. The solver optimises half the profile and mirrors legal elements, restricting an odd centre column to symmetric profiles. Both surfaces and stair orientations match exactly. Fractional spans receive equal margins on both ends; asymmetric edits use the full solver.
+

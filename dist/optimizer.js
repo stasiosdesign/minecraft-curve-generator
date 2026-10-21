@@ -18,15 +18,18 @@ export function measurePlacedRoof(blocks,c,layout){
  let outer=0,inner=0;for(const s of surfaces.values()){const u=layout==='diagonal'?(s.x+s.z)/Math.SQRT2:layout==='hip'?Math.min(s.x,s.z):s.x;outer+=distance(u,s.high,top);inner+=distance(u,s.low,bottom);}return {outerRms:Math.sqrt(outer/surfaces.size),innerRms:Math.sqrt(inner/surfaces.size)};
 }
 export function solve(c,{onlyBlocks=false,diagonal=false}={}){
- const outer=tree(c.points),inner=tree(c.inner),layers=[],n=diagonal?Math.max(1,Math.ceil(c.w*Math.SQRT2)-1):Math.ceil(c.w),thickness=c.thickness;
+ const outer=tree(c.points),inner=tree(c.inner),layers=[],n=diagonal?Math.max(1,Math.ceil(c.w*Math.SQRT2-1e-9)-1):Math.ceil(c.w-1e-9),thickness=c.thickness;
  const at=t=>c.fn(Math.max(0,Math.min(c.w,t)));
- for(let x=0;x<n;x++){
+ const centre=diagonal?(n+1)/(2*Math.SQRT2):n/2;
+ const symmetric=Math.abs(centre-c.w/2)<1e-7&&c.points.every(([x,y],i)=>Math.abs(y-c.points[c.points.length-1-i][1])<1e-7);
+ const count=symmetric?Math.ceil(n/2):n;
+ for(let x=0;x<count;x++){
   const ys=[0,.25,.5,.75,1].map(t=>at(diagonal?(x+2*t)/Math.SQRT2:x+t)),min=Math.min(...ys),max=Math.max(...ys),top=profiles(min,max,true,onlyBlocks),bottom=profiles(min-thickness,max-thickness,false,onlyBlocks),opts=[];
   const riserCache=new Map();
   function edgeError(a,b,xx,ref){const len=Math.abs(b-a);if(!len)return 0;const lo=Math.min(a,b),key=[lo,lo+len,xx,ref===outer?0:1].join(',');if(riserCache.has(key))return riserCache.get(key);const count=Math.max(1,Math.ceil(len*4));let cost=0;for(let j=0;j<count;j++)cost+=distance(xx,lo+len*(j+.5)/count,ref)*len/count;riserCache.set(key,cost);return cost;}
   function surface(profile,ref){let e=0;for(let j=0;j<8;j++){if(diagonal){for(let z=0;z<4;z++)e+=distance((x+(j+.5)/8+(z+.5)/4)/Math.SQRT2,profile[j<4?0:1],ref)/32;}else e+=distance(x+(j+.5)/8,profile[j<4?0:1],ref)/8;}if(diagonal){for(let z=0;z<4;z++)e+=edgeError(profile[0],profile[1],(x+.5+(z+.5)/4)/Math.SQRT2,ref)/4;return e;}return e+edgeError(profile[0],profile[1],x+.5,ref);}
   const tc=new Map(top.map(a=>[a,surface(a,outer)])),bc=new Map(bottom.map(a=>[a,surface(a,inner)]));
-  for(const high of top)for(const low of bottom){const tiles=columnTiles(x,low,high,onlyBlocks);if(!tiles)continue;const thick=(high[0]+high[1]-low[0]-low[1])/2;const unary=tc.get(high)+bc.get(low)+.008*(thick-thickness)**2+.0002*tiles.filter(t=>t.type!=='block').length;opts.push({high,low,tiles,unary,cost:Infinity,prev:-1});}
+  for(const high of top)for(const low of bottom){if(symmetric&&n%2&&x===count-1&&(high[0]!==high[1]||low[0]!==low[1]))continue;const tiles=columnTiles(x,low,high,onlyBlocks);if(!tiles)continue;const thick=(high[0]+high[1]-low[0]-low[1])/2;const unary=tc.get(high)+bc.get(low)+.008*(thick-thickness)**2+.0002*tiles.filter(t=>t.type!=='block').length;opts.push({high,low,tiles,unary:symmetric&&n%2&&x===count-1?unary/2:unary,cost:Infinity,prev:-1});}
   // DP is exact within these retained states, not over all possible builds.
   opts.sort((a,b)=>a.unary-b.unary);const kept=opts.slice(0,72);
   const bridge=opts.find(o=>Math.max(...o.low)<=Math.floor(min-thickness)&&Math.min(...o.high)>=Math.ceil(max));
@@ -42,7 +45,9 @@ export function solve(c,{onlyBlocks=false,diagonal=false}={}){
   }}layers.push(kept);
  }
  const last=layers.at(-1);let k=last.reduce((best,o,i)=>o.cost<last[best].cost?i:best,0);if(!Number.isFinite(last[k]?.cost))throw Error('No connected roof found. Increase thickness.');
- const cost=last[k].cost,columns=[];for(let x=n-1;x>=0;x--){const o=layers[x][k];columns.unshift(o);k=o.prev;}
+ const cost=last[k].cost*(symmetric?2:1),columns=[];for(let x=count-1;x>=0;x--){const o=layers[x][k];columns.unshift(o);k=o.prev;}
+ // Mirror complete legal elements, including stair handedness. The centre column is flat on both surfaces.
+ if(symmetric)for(let x=count;x<n;x++){const source=columns[n-1-x],high=[...source.high].reverse(),low=[...source.low].reverse();columns.push({high,low,tiles:columnTiles(x,low,high,onlyBlocks)});}
  const blocks=columns.flatMap(o=>o.tiles);let outside=0,inside=0;for(let x=0;x<n;x++)for(let j=0;j<16;j++)for(let z=0;z<(diagonal?4:1);z++){const xx=diagonal?(x+(j+.5)/16+(z+.5)/4)/Math.SQRT2:x+(j+.5)/16;outside+=distance(xx,columns[x].high[j<8?0:1],outer);inside+=distance(xx,columns[x].low[j<8?0:1],inner);}
  const samples=n*16*(diagonal?4:1);
  return {blocks,diagonal,columns:columns.map(({high,low})=>({high,low})),cost,outerRms:Math.sqrt(outside/samples),innerRms:Math.sqrt(inside/samples),rms:Math.sqrt((outside+inside)/(samples*2)),maxY:Math.max(c.h,...blocks.map(b=>b.y+1)),minY:Math.min(c.min,...blocks.map(b=>b.y))};

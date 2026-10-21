@@ -5,7 +5,8 @@
   "scripts": {
     "build": "node build.mjs",
     "start": "node serve.mjs",
-    "test": "node tests.mjs && node tests-3d.mjs && node tests-layouts.mjs && node tests-hip-profile.mjs && node tests-bend.mjs"
+    "test": "node tests.mjs && node tests-3d.mjs && node tests-layouts.mjs && node tests-hip-profile.mjs && node tests-bend.mjs && node tests-symmetry.mjs"
   }
 }
+
 
