@@ -83,3 +83,6 @@ The interface uses a dark theme on all screen sizes. On phones, Adjust opens a b
 Mobile inputs use 16px text, touch controls are enlarged, and safe-area insets are respected. The page itself does not scroll; only an expanded settings panel can scroll on smaller screens. Both 2D and 3D retain touch dragging and zoom buttons. Coarse-pointer curve handles use 44px touch targets.
 
 Browser checks covered 1440×900, 390×844, 320×568 and 667×375, including panel opening/closing, advanced settings, curve edits and 2D/3D rendering.
+
+The middle handle moves in both axes. Dragging it sideways switches to Custom; Bend position controls its horizontal location (10–90% of the span). A smooth monotone parameter mapping preserves the endpoints and moves the bend without a join or loop. Arrow keys also move the focused handle.
+

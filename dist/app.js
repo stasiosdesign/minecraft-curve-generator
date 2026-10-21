@@ -3,9 +3,9 @@ import {curve} from './curves.js';
 import {solve,measurePlacedRoof} from './optimizer.js';
 import {createRoof3D} from './view3d.js';
 import {placeRoof,placementDirection} from './layout.js';
-const $=s=>document.querySelector(s),defaults={type:'circle',radius:20,extent:120,width:32,height:12,left:4,middle:16,right:4,thickness:2};
+const $=s=>document.querySelector(s),defaults={type:'circle',radius:20,extent:120,width:32,height:12,left:4,middle:16,bend:50,right:4,thickness:2};
 let p={...defaults},result,worker,timer,watchdog,request=0,zoom=1,pan=[0,0],drag,selected=-1,mono=false,pending=false,frozenView=null;
-const specs={circle:[['radius','Radius',2,128,.5],['extent','Arc',10,180,1]],ellipse:[['width','Width',4,128,.5],['height','Rise',1,64,.5]],custom:[['width','Width',4,128,.5],['middle','Centre',-32,96,.5]]};
+const specs={circle:[['radius','Radius',2,128,.5],['extent','Arc',10,180,1]],ellipse:[['width','Width',4,128,.5],['height','Rise',1,64,.5]],custom:[['width','Width',4,128,.5],['middle','Rise',-32,96,.5],['bend','Bend position %',10,90,1]]};
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 let mode3d=false,roofDepth=12,layout='straight',sceneCache=null;
 function scene(){if(!result||result.layout!==layout)return null;const key=layout+':'+roofDepth;if(sceneCache?.roof===result.roof&&sceneCache.key===key)return sceneCache.model;const model=placeRoof(result.roof,roofDepth,layout,result.c.w);model.errors=measurePlacedRoof(model.blocks,result.c,layout);sceneCache={roof:result.roof,key,model};return model;}
@@ -34,15 +34,16 @@ function render(){
  html+=`<g transform="scale(1 -1)" opacity="${pending?.4:1}">`;
  if(layout!=='diagonal')r?.blocks.forEach((e,i)=>{const color=mono?'#9eaf8e':e.type==='block'?'#a5b691':e.type==='slab'?'#d3b981':'#6b8a66';html+=`<polygon class="tile ${selected===i?'selected':''}" data-index="${i}" points="${polygon(e).map(a=>a.join(',')).join(' ')}" fill="${color}" stroke="#26392c" stroke-width=".025"><title>${describe(e)}</title></polygon>`;});html+='</g>';
  if($('#reference').checked)for(const [points,color,dash]of [[c.points,'#e5a27c',''],[c.inner,'#8bbbd7','5 4']])html+=`<polyline points="${points.map(([x,y])=>`${x},${-y}`).join(' ')}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-dasharray="${dash}" pointer-events="none"/>`;
- if($('#handles').checked)c.handles.forEach(([x,y],i)=>{html+=`<g class="handle" data-handle="${i}" role="slider" tabindex="0" aria-label="${['Left endpoint','Centre rise','Right endpoint'][i]}" aria-valuemin="-32" aria-valuemax="96" aria-valuenow="${y.toFixed(1)}" aria-valuetext="x ${x.toFixed(1)}, y ${y.toFixed(1)}"><circle cx="${x}" cy="${-y}" r="${(matchMedia("(pointer:coarse)").matches?22:13)*unit}" fill="transparent"/><circle cx="${x}" cy="${-y}" r="${5.5*unit}" fill="#c1dbac" stroke="#1a2b20" stroke-width="2" vector-effect="non-scaling-stroke"/><title>${['Drag to change left end / span','Drag to change rise','Drag to change right end / span'][i]}</title></g>`;});
- svg.innerHTML=html;$('#view-title').textContent=layout==='straight'?({circle:'Circular',ellipse:'Elliptical',custom:'Custom'}[p.type])+' roof':'Profile editor';$('#dimensions').textContent=`${c.w.toFixed(1)} wide`;$('#drag-hint').hidden=!$('#handles').checked;
+ if($('#handles').checked)c.handles.forEach(([x,y],i)=>{html+=`<g class="handle" data-handle="${i}" role="slider" tabindex="0" aria-label="${['Left endpoint','Bend position and rise','Right endpoint'][i]}" aria-valuemin="-32" aria-valuemax="96" aria-valuenow="${y.toFixed(1)}" aria-valuetext="x ${x.toFixed(1)}, y ${y.toFixed(1)}"><circle cx="${x}" cy="${-y}" r="${(matchMedia("(pointer:coarse)").matches?22:13)*unit}" fill="transparent"/><circle cx="${x}" cy="${-y}" r="${5.5*unit}" fill="#c1dbac" stroke="#1a2b20" stroke-width="2" vector-effect="non-scaling-stroke"/><title>${['Drag to change left end / span','Drag to move the bend left, right, up or down','Drag to change right end / span'][i]}</title></g>`;});
+ const focusedHandle=document.activeElement?.dataset.handle;svg.innerHTML=html;if(focusedHandle!==undefined)svg.querySelector(`[data-handle="${focusedHandle}"]`)?.focus({preventScroll:true});$('#view-title').textContent=layout==='straight'?({circle:'Circular',ellipse:'Elliptical',custom:'Custom'}[p.type])+' roof':'Profile editor';$('#dimensions').textContent=`${c.w.toFixed(1)} wide`;$('#drag-hint').hidden=!$('#handles').checked;
  $('.reference-key').classList.toggle('hidden',!$('#reference').checked);
  if(r){$('#outer-error').textContent=r.outerRms.toFixed(3);$('#inner-error').textContent=r.innerRms.toFixed(3);for(const [id,pred]of [['blocks',e=>e.type==='block'],['slabs',e=>e.type==='slab'],['stairs',e=>['left','right'].includes(e.type)]])$('#'+id).textContent=r.blocks.filter(pred).length;}
  if(layout!=='straight'){const model=scene();if(model){for(const [id,pred]of [['blocks',e=>e.type==='block'],['slabs',e=>e.type==='slab'],['stairs',e=>['left','right'].includes(e.type)]])$('#'+id).textContent=model.blocks.filter(pred).length;$('#outer-error').textContent=model.errors.outerRms.toFixed(3);$('#inner-error').textContent=model.errors.innerRms.toFixed(3);}}
 }
 function setHandle(index,dx,dy,original,originalCurve){
  p={...original};const w=clamp(originalCurve.w+(index===0?-dx:index===2?dx:0),4,128),hs=originalCurve.handles.map(a=>a[1]);
- if(index!==1&&Math.abs(dy)>.2){p.type='custom';p.width=w;p.left=hs[0];p.middle=hs[1];p.right=hs[2];p[index===0?'left':'right']=clamp(hs[index]+dy,-32,96);}
+ if(index===1&&(original.type==='custom'||Math.abs(dx)>.2)){p.type='custom';p.width=w;p.left=hs[0];p.right=hs[2];p.middle=clamp(hs[1]+dy,-32,96);p.bend=clamp(100*(originalCurve.handles[1][0]+dx)/w,10,90);}
+ else if(index!==1&&Math.abs(dy)>.2){p.type='custom';p.width=w;p.bend=100*originalCurve.handles[1][0]/originalCurve.w;p.left=hs[0];p.middle=hs[1];p.right=hs[2];p[index===0?'left':'right']=clamp(hs[index]+dy,-32,96);}
  else if(p.type==='circle'){
   if(index===1){const rise=clamp(hs[1]+dy-4,Math.max(.2,w*w/1024),w/2);p.radius=(w*w/4+rise*rise)/(2*rise);p.extent=4*Math.atan(2*rise/w)*180/Math.PI;}
   else p.radius=clamp(w/(2*Math.sin(p.extent*Math.PI/360)),2,128);
@@ -57,7 +58,7 @@ svg.onpointerup=e=>{if(!drag)return;const handle=drag.handle;if(!drag.moved&&han
 svg.onpointercancel=()=>{drag=null;frozenView=null;render();};
 svg.onkeydown=e=>{const h=e.target.closest('[data-handle]');if(!h||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();const i=+h.dataset.handle,d=e.shiftKey?1:.5;setHandle(i,e.key==='ArrowLeft'?-d:e.key==='ArrowRight'?d:0,e.key==='ArrowUp'?d:e.key==='ArrowDown'?-d:0,{...p},curve(p));svg.querySelector(`[data-handle="${i}"]`)?.focus();};
 svg.addEventListener('wheel',e=>{e.preventDefault();zoom=clamp(zoom*Math.exp(-e.deltaY*.001),.5,12);render();},{passive:false});
-$('#type').onchange=e=>{const c=curve(p);p.type=e.target.value;p.width=clamp(c.w,4,128);p.height=clamp(c.h-4,1,64);p.left=c.handles[0][1];p.middle=c.handles[1][1];p.right=c.handles[2][1];zoom=1;pan=[0,0];controls();calculate();};
+$('#type').onchange=e=>{const c=curve(p);p.type=e.target.value;p.width=clamp(c.w,4,128);p.height=clamp(c.h-4,1,64);p.bend=100*c.handles[1][0]/c.w;p.left=c.handles[0][1];p.middle=c.handles[1][1];p.right=c.handles[2][1];zoom=1;pan=[0,0];controls();calculate();};
 $('#thickness').oninput=e=>{if(e.target.value===''||!Number.isFinite(+e.target.value))return;p.thickness=clamp(+e.target.value,1,6);calculate();};
 for(const id of ['reference','grid','handles'])$('#'+id).onchange=render;$('#baseline').onchange=calculate;
 $('#mono').onclick=()=>{mono=!mono;$('#mono').setAttribute('aria-pressed',String(mono));document.body.classList.toggle('mono',mono);render();};
