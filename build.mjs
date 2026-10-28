@@ -6,7 +6,8 @@ const worker=core+'\n'+plain(await read('dist/worker.js'));
 const app=core+'\nglobalThis.CURVE_WORKER_SOURCE='+JSON.stringify(worker)+';\n'+plain(await read('dist/layout.js'))+'\n'+plain(await read('dist/view3d.js'))+'\n'+plain(await read('dist/app.js'));
 const css=(await read('dist/style.css')).replace(/^@import[^;]+;\s*/, '');
 const portrait='data:image/png;base64,'+(await readFile(new URL('dist/assets/susan-boyle.png',import.meta.url))).toString('base64');
-const frameSource=(await Promise.all(['layout','view3d','frame','frame-app'].map(name=>read(`dist/${name}.js`)))).map(plain).join('\n');
+const frameWorker=core+'\n'+plain(await read('dist/frame-curve.js'))+'\nself.onmessage=({data})=>{try{self.postMessage({roof:frameCurve(data).roof});}catch(e){self.postMessage({error:e.message});}};';
+const frameSource=core+'\nglobalThis.FRAME_WORKER_SOURCE='+JSON.stringify(frameWorker)+';\n'+(await Promise.all(['layout','view3d','frame','frame-curve','frame-app'].map(name=>read(`dist/${name}.js`)))).map(plain).join('\n');
 const frameHtml=(await read('frame-template.html')).replace('<script type="module" src="frame-app.js"></script>',()=>`<script>(()=>{
 ${frameSource}
 })();</script>`);

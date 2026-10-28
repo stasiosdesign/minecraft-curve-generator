@@ -17,19 +17,20 @@ export function measurePlacedRoof(blocks,c,layout){
  for(const e of blocks){const mask=e.type==='block'?[1,1,1,1]:e.type==='slab'?[1,1,0,0]:e.type==='right'?[1,1,0,1]:[1,1,1,0];for(let x=0;x<2;x++)for(let z=0;z<2;z++)for(let y=0;y<2;y++){const side=e.axis==='z'?z:x;if(!mask[(e.flip?1-y:y)*2+side])continue;const xx=e.x+(x+.5)/2,zz=e.z+(z+.5)/2,key=xx+','+zz,low=e.y+y/2,high=low+.5,s=surfaces.get(key);if(s){s.low=Math.min(s.low,low);s.high=Math.max(s.high,high);}else surfaces.set(key,{x:xx,z:zz,low,high});}}
  let outer=0,inner=0;for(const s of surfaces.values()){const u=layout==='diagonal'?(s.x+s.z)/Math.SQRT2:layout==='hip'?Math.min(s.x,s.z):s.x;outer+=distance(u,s.high,top);inner+=distance(u,s.low,bottom);}return {outerRms:Math.sqrt(outer/surfaces.size),innerRms:Math.sqrt(inner/surfaces.size)};
 }
-export function solve(c,{onlyBlocks=false,diagonal=false}={}){
+export function solve(c,{onlyBlocks=false,diagonal=false,startThickness=null}={}){
  const outer=tree(c.points),inner=tree(c.inner),layers=[],n=diagonal?Math.max(1,Math.ceil(c.w*Math.SQRT2-1e-9)-1):Math.ceil(c.w-1e-9),thickness=c.thickness;
  const at=t=>c.fn(Math.max(0,Math.min(c.w,t)));
  const centre=diagonal?(n+1)/(2*Math.SQRT2):n/2;
- const symmetric=Math.abs(centre-c.w/2)<1e-7&&c.points.every(([x,y],i)=>Math.abs(y-c.points[c.points.length-1-i][1])<1e-7);
+ const symmetric=startThickness===null&&Math.abs(centre-c.w/2)<1e-7&&c.points.every(([x,y],i)=>Math.abs(y-c.points[c.points.length-1-i][1])<1e-7);
  const count=symmetric?Math.ceil(n/2):n;
  for(let x=0;x<count;x++){
   const ys=[0,.25,.5,.75,1].map(t=>at(diagonal?(x+2*t)/Math.SQRT2:x+t)),min=Math.min(...ys),max=Math.max(...ys),top=profiles(min,max,true,onlyBlocks),bottom=profiles(min-thickness,max-thickness,false,onlyBlocks),opts=[];
+  if(x===0&&startThickness!==null){top.push([startThickness,startThickness]);bottom.push([0,0]);}
   const riserCache=new Map();
   function edgeError(a,b,xx,ref){const len=Math.abs(b-a);if(!len)return 0;const lo=Math.min(a,b),key=[lo,lo+len,xx,ref===outer?0:1].join(',');if(riserCache.has(key))return riserCache.get(key);const count=Math.max(1,Math.ceil(len*4));let cost=0;for(let j=0;j<count;j++)cost+=distance(xx,lo+len*(j+.5)/count,ref)*len/count;riserCache.set(key,cost);return cost;}
   function surface(profile,ref){let e=0;for(let j=0;j<8;j++){if(diagonal){for(let z=0;z<4;z++)e+=distance((x+(j+.5)/8+(z+.5)/4)/Math.SQRT2,profile[j<4?0:1],ref)/32;}else e+=distance(x+(j+.5)/8,profile[j<4?0:1],ref)/8;}if(diagonal){for(let z=0;z<4;z++)e+=edgeError(profile[0],profile[1],(x+.5+(z+.5)/4)/Math.SQRT2,ref)/4;return e;}return e+edgeError(profile[0],profile[1],x+.5,ref);}
   const tc=new Map(top.map(a=>[a,surface(a,outer)])),bc=new Map(bottom.map(a=>[a,surface(a,inner)]));
-  for(const high of top)for(const low of bottom){if(symmetric&&n%2&&x===count-1&&(high[0]!==high[1]||low[0]!==low[1]))continue;const tiles=columnTiles(x,low,high,onlyBlocks);if(!tiles)continue;const thick=(high[0]+high[1]-low[0]-low[1])/2;const unary=tc.get(high)+bc.get(low)+.008*(thick-thickness)**2+.0002*tiles.filter(t=>t.type!=='block').length;opts.push({high,low,tiles,unary:symmetric&&n%2&&x===count-1?unary/2:unary,cost:Infinity,prev:-1});}
+  for(const high of top)for(const low of bottom){if(x===0&&startThickness!==null&&(low.some(y=>y!==0)||high.some(y=>y!==startThickness)))continue;if(symmetric&&n%2&&x===count-1&&(high[0]!==high[1]||low[0]!==low[1]))continue;const tiles=columnTiles(x,low,high,onlyBlocks);if(!tiles)continue;const thick=(high[0]+high[1]-low[0]-low[1])/2;const unary=tc.get(high)+bc.get(low)+.008*(thick-thickness)**2+.0002*tiles.filter(t=>t.type!=='block').length;opts.push({high,low,tiles,unary:symmetric&&n%2&&x===count-1?unary/2:unary,cost:Infinity,prev:-1});}
   // DP is exact within these retained states, not over all possible builds.
   opts.sort((a,b)=>a.unary-b.unary);const kept=opts.slice(0,72);
   const bridge=opts.find(o=>Math.max(...o.low)<=Math.floor(min-thickness)&&Math.min(...o.high)>=Math.ceil(max));
