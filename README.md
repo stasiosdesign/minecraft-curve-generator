@@ -89,3 +89,6 @@ The middle handle moves in both axes. Dragging it sideways switches to Custom; B
 
 Symmetric references are centred within their enclosing block grid without changing their mathematical shape. The solver optimises half the profile and mirrors legal elements, restricting an odd centre column to symmetric profiles. Both surfaces and stair orientations match exactly. Fractional spans receive equal margins on both ends; asymmetric edits use the full solver.
 
+
+Frame tab: a separate 3D workspace with a 22 × 22 outer perimeter and 14 × 14 inner perimeter at coordinates 4–17 (the fifth block counting the outer edge). Inner pillar coordinates are 4, 8, 13, 17 along each side: 12 unique pillars, spaced 4/5/4 to stay symmetric on integer blocks. Perpendicular projections to the outer edges give 16 outer pillars. Heights default to 15/6 including the perimeter block; base elevation defaults to Y=20 with ground at Y=0. Heights and elevation are editable, pillar clicks select a group, and CSV exports exact placements. Both tabs are embedded in the single offline HTML file.
+

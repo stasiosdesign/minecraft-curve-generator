@@ -92,3 +92,5 @@ controls();calculate();
 $('#portrait-trigger').onclick=()=>$('#portrait-dialog').showModal();
 $('#portrait-close').onclick=()=>$('#portrait-dialog').close();
 $('#portrait-dialog').onclick=e=>{if(e.target===$('#portrait-dialog')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}};
+
+for(const name of ['curve','frame'])$('#'+name+'-tab').onclick=()=>{const active=name==='frame';setSettings(false);document.body.classList.toggle('frame-active',active);$('#frame-panel').hidden=!active;$('#curve-tab').setAttribute('aria-pressed',String(!active));$('#frame-tab').setAttribute('aria-pressed',String(active));if(!active)render();};
