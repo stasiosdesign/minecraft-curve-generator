@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bridge · Ravine</title><style>
 :root{font:13px system-ui;color:#ccc;color-scheme:dark;background:#080808}*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}body{display:grid;grid-template-rows:auto minmax(0,1fr) auto}nav{display:flex;gap:6px;padding:10px;background:#151515;border-bottom:1px solid #333}button{font:inherit;color:#ddd;background:#242424;border:1px solid #444;border-radius:5px;min-height:44px;padding:8px 12px;cursor:pointer}button:focus-visible{outline:2px solid #aaa;outline-offset:2px}main{position:relative;min-height:0}canvas{position:absolute;width:100%;height:100%;touch-action:none}#zoom{position:absolute;bottom:14px;right:14px;display:flex;gap:6px}#zoom button{min-width:44px}#hint{position:absolute;left:14px;bottom:20px;color:#999;font-size:11px;pointer-events:none;max-width:55%}footer{background:#151515;border-top:1px solid #333;padding:10px 14px;font-size:11px;display:flex;gap:12px;justify-content:space-between;flex-wrap:wrap}@media(max-width:600px){footer{font-size:10px}#hint{display:none}}
-</style></head><body><nav><button id="perspective">Perspective</button><button id="front">Cross-section</button><button id="top">Top</button></nav><main><canvas id="ravine" tabindex="0" aria-label="3D ravine environment. Drag to orbit; shift-drag to pan; scroll to zoom."></canvas><span id="hint">Ravine environment · Drag to orbit</span><div id="zoom"><button id="minus" aria-label="Zoom out">−</button><button id="fit">Fit</button><button id="plus" aria-label="Zoom in">+</button></div></main><footer><span>50 high · 26 river gap · 50 top gap</span><span>20 blocks along river</span></footer><script>(()=>{
+</style></head><body><nav><button id="perspective">Perspective</button><button id="front">Cross-section</button><button id="top">Top</button></nav><main><canvas id="ravine" tabindex="0" aria-label="3D ravine environment. Drag to orbit; shift-drag to pan; scroll to zoom."></canvas><span id="hint">Ravine environment · Drag to orbit</span><div id="zoom"><button id="minus" aria-label="Zoom out">−</button><button id="fit">Fit</button><button id="plus" aria-label="Zoom in">+</button></div></main><footer><span>~50 high · 37 river gap · 78 top gap</span><span>36 blocks along river</span></footer><script>(()=>{
 // Only integer world positions and cardinal stair directions are used.
 function placeRoof(roof,depth,layout='straight',run=null){
  const blocks=[];
@@ -55,22 +55,43 @@ function createRoof3D(canvas,onSelect){
 
 
 
-// Compact, deterministic ravine: integer blocks, 50 high, 26/50 wide openings.
-function ravineGap(y){return 2*(13+Math.floor(12*Math.max(0,Math.min(49,y))/49));}
+// Seeded integer terrain: fixed river/top spans, with irregular ledges and ridgelines.
+function ravineGap(y){return Math.round(37+41*(Math.max(0,Math.min(49,y))/49)**.9);}
+function ravineEdges(y,z){
+ const t=Math.max(0,Math.min(1,y/49)),gap=ravineGap(y),meander=Math.round(2*Math.sin(z*.19)),rough=Math.sin(Math.PI*t);
+ const left=-Math.floor(gap/2)+meander-Math.round(rough*(2*Math.sin(z*.47+y*.24)+Math.sin(z*.91-y*.38)));
+ const right=left+gap+Math.round(rough*(2*Math.sin(z*.32-y*.19)));
+ return [left,right];
+}
 function createRavine(){
- const blocks=[],occupied=new Map(),depth=20;
+ const blocks=[],occupied=new Map(),depth=36;
+ const noise=(x,y,z)=>{const n=Math.sin(x*12.9898+y*37.719+z*78.233)*43758.5453;return n-Math.floor(n);};
  const add=(x,y,z,group)=>{const id=blocks.length;blocks.push({x,y,z,type:'block',group});occupied.set(`${x},${y},${z}`,id);};
  for(let z=0;z<depth;z++){
-  for(let y=0;y<50;y++){const half=ravineGap(y)/2;for(let x=-34;x<34;x++)if(x< -half||x>=half)add(x,y,z, y===49?'ridge':(Math.floor(y/5)+Math.floor(z/6))%3===0?'rock-light':'rock');}
-  for(let x=-13;x<13;x++){add(x,-1,z,'riverbed');add(x,0,z,'water');}
+  for(let y=0;y<58;y++){
+   let [left,right]=ravineEdges(y,z);
+   // Above the nominal cliff rim the two sides form different broken summits.
+   if(y>49){left-=Math.ceil((y-49)*(1.1+.3*Math.sin(z*.4)));right+=Math.ceil((y-49)*(1.2+.3*Math.cos(z*.3)));}
+   const outerLeft=-Math.round(66-15*(y/50)**1.4+3*Math.sin(z*.25)+2*Math.sin(z*.67+y*.11));
+   const outerRight=Math.round(66-15*(y/50)**1.4+4*Math.sin(z*.21+1.6)+2*Math.cos(z*.56-y*.15));
+   for(let x=outerLeft;x<outerRight;x++)if(x<left||x>=right){const n=noise(x,y,z);add(x,y,z,n>.91?'rock-light':n<.1?'rock-dark':Math.sin(y*.55+z*.12+x*.04)>.8?'strata':'rock');}
+  }
+  const [left,right]=ravineEdges(0,z);
+  for(let x=left;x<right;x++){add(x,-1,z,'riverbed');add(x,0,z,'water');}
+ }
+ // Weathered caps and thin soil on exposed upper terraces, not a flat roof.
+ for(const b of blocks)if(b.y>30&&!occupied.has(`${b.x},${b.y+1},${b.z}`)){
+  b.group=b.y>52?'rock-light':noise(b.x,0,b.z)>.18?'grass':'gravel';
+  for(let d=1;d<=2;d++){const id=occupied.get(`${b.x},${b.y-d},${b.z}`);if(id!==undefined&&b.group==='grass')blocks[id].group='soil';}
  }
  const mesh=[];
  for(let id=0;id<blocks.length;id++){const b=blocks[id],p=[b.x,b.y,b.z];for(let axis=0;axis<3;axis++)for(const sign of [-1,1]){const next=[...p];next[axis]+=sign;if(occupied.has(next.join(',')))continue;const axes=[0,1,2].filter(a=>a!==axis),pts=[[0,0],[1,0],[1,1],[0,1]].map(([u,v])=>{const q=[...p];q[axis]+=sign>0?1:0;q[axes[0]]+=u;q[axes[1]]+=v;return q;}),normal=[0,0,0];normal[axis]=sign;mesh.push({pts,normal,id,z:b.z});}}
- return {blocks,mesh,placed:true,minX:-34,maxX:34,minY:-1,maxY:50,minZ:0,maxZ:depth,groundY:-1,dimensions:{height:50,bottomGap:26,topGap:50,depth}};
+ let minX=0,maxX=0,maxY=0;for(const b of blocks){minX=Math.min(minX,b.x);maxX=Math.max(maxX,b.x+1);maxY=Math.max(maxY,b.y+1);}
+ return {blocks,mesh,placed:true,minX,maxX,minY:-1,maxY,minZ:0,maxZ:depth,groundY:-1,dimensions:{height:50,bottomGap:37,topGap:78,depth}};
 }
 
 const bridgeEl=id=>document.getElementById(id),bridgeView=createRoof3D(bridgeEl('ravine'),()=>{});let ravineModel;
-function showRavine(){if(!bridgeEl('ravine').getBoundingClientRect().width)return;if(!ravineModel)ravineModel=createRavine();bridgeView.update(ravineModel,20,{grid:false,groupColors:{rock:'#777777','rock-light':'#898989',ridge:'#9c9c9c',riverbed:'#484848',water:'#647b8c'}});}
+function showRavine(){if(!bridgeEl('ravine').getBoundingClientRect().width)return;if(!ravineModel)ravineModel=createRavine();bridgeView.update(ravineModel,36,{grid:false,groupColors:{rock:'#777777','rock-light':'#92928c','rock-dark':'#5a5b5c',strata:'#807c72',grass:'#687458',soil:'#786550',gravel:'#929084',riverbed:'#484848',water:'#5d7c92'}});}
 bridgeEl('perspective').onclick=()=>bridgeView.preset('outside');bridgeEl('front').onclick=()=>bridgeView.preset('front');bridgeEl('top').onclick=()=>bridgeView.preset('top');bridgeEl('minus').onclick=()=>bridgeView.zoom(1/1.3);bridgeEl('plus').onclick=()=>bridgeView.zoom(1.3);bridgeEl('fit').onclick=()=>bridgeView.fit();
 new ResizeObserver(showRavine).observe(document.querySelector('main'));showRavine();
 globalThis.bridgeState={capture:()=>({camera:bridgeView.getState()}),restore:s=>bridgeView.setState(s.camera)};
