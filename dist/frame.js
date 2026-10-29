@@ -2,7 +2,7 @@
 export function createFrame({innerHeight=9,outerHeight=5,centerHeight=11,elevation=20,roof=null,curveWidth=5}={}){
  const integer=(v,min,max)=>Math.max(min,Math.min(max,Math.round(Number(v)||0)));
  innerHeight=integer(innerHeight,1,64);outerHeight=integer(outerHeight,1,64);centerHeight=integer(centerHeight,1,64);elevation=integer(elevation,0,64);
- curveWidth=integer(curveWidth,1,21);
+ curveWidth=integer(curveWidth,1,32);
  const inner=[],outer=[],center=[[8,8],[8,12],[12,8],[12,12]],positions=[4,8,12,16],seen=new Set();
  for(const t of positions)for(const [x,z]of [[t,4],[t,16],[4,t],[16,t]]){const key=x+','+z;if(!seen.has(key)){seen.add(key);inner.push([x,z]);}}
  for(const t of positions)outer.push([t,0],[t,20],[0,t],[20,t]);
@@ -22,5 +22,6 @@ export function createFrame({innerHeight=9,outerHeight=5,centerHeight=11,elevati
   wings.push({...e,x,z,y:surfaceY+e.y,axis,type,group:'curves',wing:['east','south','west','north'][side],layer:'wing-'+side});
  }
  const blocks=[...structure,...wings],intersections=wings.filter(b=>cells.has(`${b.x},${b.y},${b.z}`)).length;
- return {blocks,inner,outer,center,innerHeight,outerHeight,centerHeight,elevation,surfaceY,curveWidth,intersections,placed:true,minX:Math.min(0,...blocks.map(b=>b.x)),maxX:Math.max(21,...blocks.map(b=>b.x+1)),minZ:Math.min(0,...blocks.map(b=>b.z)),maxZ:Math.max(21,...blocks.map(b=>b.z+1)),minY:Math.min(elevation,...blocks.map(b=>b.y)),maxY:Math.max(...blocks.map(b=>b.y+1)),groundY:0};
+ const bounds={minX:0,maxX:21,minZ:0,maxZ:21,minY:elevation,maxY:elevation};for(const b of blocks){bounds.minX=Math.min(bounds.minX,b.x);bounds.maxX=Math.max(bounds.maxX,b.x+1);bounds.minZ=Math.min(bounds.minZ,b.z);bounds.maxZ=Math.max(bounds.maxZ,b.z+1);bounds.minY=Math.min(bounds.minY,b.y);bounds.maxY=Math.max(bounds.maxY,b.y+1);}
+ return {blocks,inner,outer,center,innerHeight,outerHeight,centerHeight,elevation,surfaceY,curveWidth,intersections,placed:true,...bounds,groundY:0};
 }

@@ -1,0 +1,78 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bridge · Ravine</title><style>
+:root{font:13px system-ui;color:#ccc;color-scheme:dark;background:#080808}*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}body{display:grid;grid-template-rows:auto minmax(0,1fr) auto}nav{display:flex;gap:6px;padding:10px;background:#151515;border-bottom:1px solid #333}button{font:inherit;color:#ddd;background:#242424;border:1px solid #444;border-radius:5px;min-height:44px;padding:8px 12px;cursor:pointer}button:focus-visible{outline:2px solid #aaa;outline-offset:2px}main{position:relative;min-height:0}canvas{position:absolute;width:100%;height:100%;touch-action:none}#zoom{position:absolute;bottom:14px;right:14px;display:flex;gap:6px}#zoom button{min-width:44px}#hint{position:absolute;left:14px;bottom:20px;color:#999;font-size:11px;pointer-events:none;max-width:55%}footer{background:#151515;border-top:1px solid #333;padding:10px 14px;font-size:11px;display:flex;gap:12px;justify-content:space-between;flex-wrap:wrap}@media(max-width:600px){footer{font-size:10px}#hint{display:none}}
+</style></head><body><nav><button id="perspective">Perspective</button><button id="front">Cross-section</button><button id="top">Top</button></nav><main><canvas id="ravine" tabindex="0" aria-label="3D ravine environment. Drag to orbit; shift-drag to pan; scroll to zoom."></canvas><span id="hint">Ravine environment · Drag to orbit</span><div id="zoom"><button id="minus" aria-label="Zoom out">−</button><button id="fit">Fit</button><button id="plus" aria-label="Zoom in">+</button></div></main><footer><span>50 high · 26 river gap · 50 top gap</span><span>20 blocks along river</span></footer><script>(()=>{
+// Only integer world positions and cardinal stair directions are used.
+function placeRoof(roof,depth,layout='straight',run=null){
+ const blocks=[];
+ if(layout==='diagonal'){
+  const bands=Math.max(2,Math.ceil(depth*Math.SQRT2));
+  for(const e of roof.blocks)for(let t=e.x%2;t<bands;t+=2)blocks.push({...e,x:(e.x-t)/2,z:(e.x+t)/2,axis:'x',band:e.x});
+ }else if(layout==='hip'){
+  // Both wings use the complete edited profile. A half-span here silently
+  // discarded the right endpoint and made the 3D design differ from the editor.
+  const size=Math.max(1,Math.min(roof.columns.length,Math.ceil(run??roof.columns.length))),columns=new Map();for(const e of roof.blocks){if(!columns.has(e.x))columns.set(e.x,[]);columns.get(e.x).push(e);}
+  for(let x=0;x<size;x++)for(let z=0;z<size;z++)for(const e of columns.get(Math.min(x,z))??[]){const seam=x===z,stair=e.type==='left'||e.type==='right';blocks.push({...e,x,z,axis:x<=z?'x':'z',...(seam&&stair?{type:'block',flip:false,seam:true}:{})});}
+ }else for(let z=0;z<depth;z++)for(const e of roof.blocks)blocks.push({...e,z,axis:'x'});
+ let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,minZ=Infinity,maxZ=-Infinity;for(const e of blocks){minX=Math.min(minX,e.x);maxX=Math.max(maxX,e.x+1);minY=Math.min(minY,e.y);maxY=Math.max(maxY,e.y+1);minZ=Math.min(minZ,e.z);maxZ=Math.max(maxZ,e.z+1);}
+ return {blocks,placed:true,layout,minX,maxX,minY,maxY,minZ,maxZ};
+}
+function occupiedVoxels(blocks){
+ const voxels=new Map();blocks.forEach((e,id)=>{const mask=e.type==='block'?[1,1,1,1]:e.type==='slab'?[1,1,0,0]:e.type==='right'?[1,1,0,1]:[1,1,1,0];for(let a=0;a<2;a++)for(let y=0;y<2;y++)for(let b=0;b<2;b++){const side=e.axis==='z'?b:a,localY=e.flip?1-y:y;if(mask[localY*2+side])voxels.set(`${e.x*2+a},${e.y*2+y},${e.z*2+b}`,id);}});return voxels;
+}
+function placementDirection(e){return e.type==='left'||e.type==='right'?(e.type==='right'?'+':'-')+(e.axis==='z'?'Z':'X'):'';}
+
+function roofMesh(blocks,depth=1,placed=false){
+ const placements=placed?blocks:placeRoof({blocks},depth).blocks;
+ // Independent design layers must not fill or erase one another at intersections.
+ if(placements.some(b=>b.layer)){const layers=new Map();placements.forEach((b,id)=>{const k=b.layer??'default';if(!layers.has(k))layers.set(k,[]);layers.get(k).push({b,id});});return [...layers.values()].flatMap(items=>roofMesh(items.map(({b})=>({...b,layer:undefined})),1,true).map(f=>({...f,id:items[f.id].id})));}
+ const voxels=occupiedVoxels(placements),groups=new Map(),faces=[];
+ for(const [key,id]of voxels){const p=key.split(',').map(Number);for(let axis=0;axis<3;axis++)for(const sign of [-1,1]){const next=[...p];next[axis]+=sign;if(voxels.has(next.join(',')))continue;const plane=p[axis]+(sign>0?1:0),axes=[0,1,2].filter(a=>a!==axis),u=p[axes[0]],v=p[axes[1]],k=[id,axis,sign,plane].join(',');if(!groups.has(k))groups.set(k,{id,axis,sign,plane,axes,cells:new Set()});groups.get(k).cells.add(u+','+v);}}
+ for(const g of groups.values())while(g.cells.size){const [u,v]=g.cells.values().next().value.split(',').map(Number);let w=1,h=1;while(g.cells.has((u+w)+','+v))w++;while(Array.from({length:w},(_,i)=>g.cells.has((u+i)+','+(v+h))).every(Boolean))h++;for(let i=0;i<w;i++)for(let j=0;j<h;j++)g.cells.delete((u+i)+','+(v+j));
+ const pts=[[u,v],[u+w,v],[u+w,v+h],[u,v+h]].map(([a,b])=>{const p=[];p[g.axis]=g.plane/2;p[g.axes[0]]=a/2;p[g.axes[1]]=b/2;return p;}),normal=[0,0,0];normal[g.axis]=g.sign;faces.push({pts,normal,id:g.id,z:placements[g.id].z});}
+ return faces;
+}
+function createRoof3D(canvas,onSelect){
+ const ctx=canvas.getContext('2d');let yaw=-.62,pitch=.38,zoom=1,offset=[0,0],drag=null,roof,depth=12,mesh=[],options={},projected=[],frame;
+ const colors={block:'#b0b0b0',slab:'#bababa',left:'#818181',right:'#818181'};
+ function draw(){if(!roof||canvas.hidden||!ctx)return;const rect=canvas.getBoundingClientRect(),w=rect.width,h=rect.height;if(!w||!h)return;const dpr=Math.min(devicePixelRatio||1,2);canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+  const minX=roof.minX??0,maxX=roof.maxX??Math.max(...roof.blocks.map(b=>b.x+1)),minZ=roof.minZ??0,maxZ=roof.maxZ??depth,width=maxX-minX,cy=(Math.min(roof.minY,roof.groundY??roof.minY)+roof.maxY)/2,sy=Math.sin(yaw),co=Math.cos(yaw),sp=Math.sin(pitch),cp=Math.cos(pitch),radius=Math.hypot(width,roof.maxY-Math.min(roof.minY,roof.groundY??roof.minY),maxZ-minZ)/2,scale=Math.min(w,h)/(radius*2.35)*zoom;
+  const camera=[sy*cp,sp,-co*cp];
+  function project([x,y,z]){x-=(minX+maxX)/2;y-=cy;z-=(minZ+maxZ)/2;const xx=co*x+sy*z,zz=sy*x-co*z;return [w/2+offset[0]+xx*scale,h/2+offset[1]-(cp*y-sp*zz)*scale,cp*zz+sp*y];}
+  function path(pts){ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();}
+  if(options.grid){ctx.strokeStyle='#3e3e3e';ctx.lineWidth=.7;const floor=roof.groundY??(roof.minY-1),pad=3,step=width>100?4:1;for(let x=minX-pad;x<=maxX+pad;x+=step){const a=project([x,floor,minZ-pad]),b=project([x,floor,maxZ+pad]);ctx.beginPath();ctx.moveTo(...a.slice(0,2));ctx.lineTo(...b.slice(0,2));ctx.stroke();}for(let z=minZ-pad;z<=maxZ+pad;z+=step){const a=project([minX-pad,floor,z]),b=project([maxX+pad,floor,z]);ctx.beginPath();ctx.moveTo(...a.slice(0,2));ctx.lineTo(...b.slice(0,2));ctx.stroke();}}
+  projected=mesh.filter(f=>f.normal.reduce((s,n,i)=>s+n*camera[i],0)>.0001).map(f=>{const pts=f.pts.map(project);return {...f,pts,d:pts.reduce((s,p)=>s+p[2],0)/4};}).sort((a,b)=>a.d-b.d);
+  ctx.globalAlpha=options.pending?.45:1;
+  for(const face of projected){const e=roof.blocks[face.id],hex=options.groupColors?(options.selectedGroup?(e.group===options.selectedGroup?'#e1e1e1':'#484848'):(options.groupColors[e.group]??colors[e.type])):options.selectedGroup&&e.group===options.selectedGroup?'#cbcbcb':options.mono?'#a9a9a9':e.group==='outer'?'#a3a3a3':colors[e.type],light=.72+.24*Math.max(0,face.normal[1])+.12*Math.max(0,-face.normal[2])+.07*Math.max(0,-face.normal[0]);const rgb=[1,3,5].map(i=>Math.round(parseInt(hex.slice(i,i+2),16)*light));path(face.pts);ctx.fillStyle=`rgb(${rgb})`;ctx.fill();ctx.strokeStyle='rgba(70,70,70,.27)';ctx.lineWidth=.55;ctx.stroke();}
+  ctx.globalAlpha=1;
+  canvas.dataset.selectedGroup=options.selectedGroup??'';canvas.dataset.faces=String(projected.length);canvas.dataset.depth=String(depth);canvas.dataset.yaw=String(yaw);canvas.dataset.pitch=String(pitch);
+ }
+ function schedule(){cancelAnimationFrame(frame);frame=requestAnimationFrame(draw);}
+ canvas.oncontextmenu=e=>e.preventDefault();canvas.onpointerdown=e=>{drag={x:e.clientX,y:e.clientY,yaw,pitch,offset:[...offset],pan:e.shiftKey||e.button===2,moved:false};canvas.setPointerCapture(e.pointerId);e.preventDefault();};canvas.onpointermove=e=>{if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;drag.moved||=Math.hypot(dx,dy)>3;if(drag.pan)offset=[drag.offset[0]+dx,drag.offset[1]+dy];else{yaw=drag.yaw+dx*.008;pitch=Math.max(-1.5,Math.min(1.5,drag.pitch+dy*.008));}schedule();};
+ canvas.onpointerup=e=>{if(drag&&!drag.moved){const rect=canvas.getBoundingClientRect(),x=e.clientX-rect.left,y=e.clientY-rect.top;for(let i=projected.length-1;i>=0;i--){const f=projected[i];let inside=false;for(let j=0,k=f.pts.length-1;j<f.pts.length;k=j++){const a=f.pts[j],b=f.pts[k];if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])inside=!inside;}if(inside){onSelect(roof.blocks[f.id],f.z);break;}}}drag=null;if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);};canvas.onpointercancel=()=>drag=null;
+ canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.3,Math.min(12,zoom*Math.exp(-e.deltaY*.001)));schedule();},{passive:false});canvas.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();yaw+=e.key==='ArrowLeft'?-.12:e.key==='ArrowRight'?.12:0;pitch=Math.max(-1.5,Math.min(1.5,pitch+(e.key==='ArrowUp'?.12:e.key==='ArrowDown'?-.12:0)));schedule();};
+ return {getState(){return {yaw,pitch,zoom,offset:[...offset]};},setState(s){yaw=s.yaw;pitch=s.pitch;zoom=s.zoom;offset=[...s.offset];schedule();},update(r,d,o){if(r!==roof||d!==depth){roof=r;depth=d;mesh=r?(r.mesh??roofMesh(r.blocks,d,!!r.placed)):[];if(!r&&ctx)ctx.clearRect(0,0,canvas.width,canvas.height);}options=o;schedule();},zoom(factor){zoom=Math.max(.3,Math.min(12,zoom*factor));schedule();},fit(){zoom=1;offset=[0,0];schedule();},preset(name){yaw=name==='front'||name==='top'?0:-.62;pitch=name==='top'?Math.PI/2:name==='inside'?-.6:name==='front'?0:.38;zoom=1;offset=[0,0];schedule();}};
+}
+
+
+
+// Compact, deterministic ravine: integer blocks, 50 high, 26/50 wide openings.
+function ravineGap(y){return 2*(13+Math.floor(12*Math.max(0,Math.min(49,y))/49));}
+function createRavine(){
+ const blocks=[],occupied=new Map(),depth=20;
+ const add=(x,y,z,group)=>{const id=blocks.length;blocks.push({x,y,z,type:'block',group});occupied.set(`${x},${y},${z}`,id);};
+ for(let z=0;z<depth;z++){
+  for(let y=0;y<50;y++){const half=ravineGap(y)/2;for(let x=-34;x<34;x++)if(x< -half||x>=half)add(x,y,z, y===49?'ridge':(Math.floor(y/5)+Math.floor(z/6))%3===0?'rock-light':'rock');}
+  for(let x=-13;x<13;x++){add(x,-1,z,'riverbed');add(x,0,z,'water');}
+ }
+ const mesh=[];
+ for(let id=0;id<blocks.length;id++){const b=blocks[id],p=[b.x,b.y,b.z];for(let axis=0;axis<3;axis++)for(const sign of [-1,1]){const next=[...p];next[axis]+=sign;if(occupied.has(next.join(',')))continue;const axes=[0,1,2].filter(a=>a!==axis),pts=[[0,0],[1,0],[1,1],[0,1]].map(([u,v])=>{const q=[...p];q[axis]+=sign>0?1:0;q[axes[0]]+=u;q[axes[1]]+=v;return q;}),normal=[0,0,0];normal[axis]=sign;mesh.push({pts,normal,id,z:b.z});}}
+ return {blocks,mesh,placed:true,minX:-34,maxX:34,minY:-1,maxY:50,minZ:0,maxZ:depth,groundY:-1,dimensions:{height:50,bottomGap:26,topGap:50,depth}};
+}
+
+const bridgeEl=id=>document.getElementById(id),bridgeView=createRoof3D(bridgeEl('ravine'),()=>{});let ravineModel;
+function showRavine(){if(!bridgeEl('ravine').getBoundingClientRect().width)return;if(!ravineModel)ravineModel=createRavine();bridgeView.update(ravineModel,20,{grid:false,groupColors:{rock:'#777777','rock-light':'#898989',ridge:'#9c9c9c',riverbed:'#484848',water:'#647b8c'}});}
+bridgeEl('perspective').onclick=()=>bridgeView.preset('outside');bridgeEl('front').onclick=()=>bridgeView.preset('front');bridgeEl('top').onclick=()=>bridgeView.preset('top');bridgeEl('minus').onclick=()=>bridgeView.zoom(1/1.3);bridgeEl('plus').onclick=()=>bridgeView.zoom(1.3);bridgeEl('fit').onclick=()=>bridgeView.fit();
+new ResizeObserver(showRavine).observe(document.querySelector('main'));showRavine();
+globalThis.bridgeState={capture:()=>({camera:bridgeView.getState()}),restore:s=>bridgeView.setState(s.camera)};
+
+})();</script></body></html>

@@ -1,21 +1,19 @@
+import {encodeBlueprint,decodeBlueprint,validateBlueprint,readVersions,appendVersion,versionsKey} from './blueprint.js';
+import {curveDefaults,curveSpecs,mountCurveControls,editCurveHandle,changeCurveType,toggleExtraPoint} from './curve-editor.js';
 import {polygon} from './geometry.js';
 import {curve} from './curves.js';
 import {solve,measurePlacedRoof} from './optimizer.js';
 import {createRoof3D} from './view3d.js';
 import {placeRoof,placementDirection} from './layout.js';
-const $=s=>document.querySelector(s),defaults={type:'circle',radius:20,extent:120,width:32,height:12,left:4,middle:16,bend:50,right:4,thickness:2};
+const $=s=>document.querySelector(s),defaults={...curveDefaults};
 let p={...defaults},result,worker,timer,watchdog,request=0,zoom=1,pan=[0,0],drag,selected=-1,mono=false,pending=false,frozenView=null;
-const specs={circle:[['radius','Radius',2,128,.5],['extent','Arc',10,180,1]],ellipse:[['width','Width',4,128,.5],['height','Rise',1,64,.5]],custom:[['width','Width',4,128,.5],['middle','Rise',-32,96,.5],['bend','Bend position %',10,90,1]]};
+const specs=curveSpecs;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 let centerLocked=false;
 let mode3d=false,roofDepth=12,layout='straight',sceneCache=null;
 function scene(){if(!result||result.layout!==layout)return null;const key=layout+':'+roofDepth;if(sceneCache?.roof===result.roof&&sceneCache.key===key)return sceneCache.model;const model=placeRoof(result.roof,roofDepth,layout,result.c.w);model.errors=measurePlacedRoof(model.blocks,result.c,layout);sceneCache={roof:result.roof,key,model};return model;}
 const three=createRoof3D($('#preview3d'),(e,z)=>{$('#selected').textContent=describe(e)+` · z ${z}`;});
-function controls(){
- $('#type').value=p.type;$('#controls').innerHTML=specs[p.type].map(([key,label,min,max,step])=>`<div class="control"><div class="control-head"><label for="${key}-range">${label}</label><input id="${key}-number" aria-label="${label}" type="number" min="${min}" max="${max}" step="${step}" value="${Number(p[key].toFixed(2))}"></div><input id="${key}-range" aria-label="${label}" type="range" min="${min}" max="${max}" step="${step}" value="${p[key]}"></div>`).join('');
- for(const suffix of ['range','number'])if($(`#bend-${suffix}`))$(`#bend-${suffix}`).disabled=centerLocked;
- for(const [key,,min,max] of specs[p.type])for(const suffix of ['range','number'])$(`#${key}-${suffix}`).oninput=e=>{if(e.target.value===''||!Number.isFinite(+e.target.value))return;p[key]=clamp(+e.target.value,min,max);$(`#${key}-${suffix==='range'?'number':'range'}`).value=p[key];calculate();};
-}
+function controls(){$('#extra-point').textContent=p.extraEnabled?'Remove point':'Add point';$('#type').value=p.type;mountCurveControls($('#controls'),p,(key,value)=>{p[key]=value;calculate();},{centerLocked});}
 function calculate(){
  clearTimeout(timer);clearTimeout(watchdog);worker?.terminate();worker=null;const id=++request,input={...p,layout,onlyBlocks:$('#baseline').checked};pending=true;
  $('#busy').textContent='Finding the best fit…';$('#busy').hidden=false;$('#export').disabled=true;render();
@@ -31,30 +29,19 @@ function render(){
  $('#drag-hint').textContent='Drag handles to shape · Drag grid to pan';
  const minY=Math.min(c.min,r?.minY??c.min),maxY=Math.max(c.h,r?.maxY??c.h),w=c.w,aspect=box.width/box.height,baseW=Math.max(w+6,(maxY-minY+6)*aspect),baseH=baseW/aspect;
  const view=frozenView??[w/2-baseW/(2*zoom)-pan[0],-(maxY+minY)/2-baseH/(2*zoom)-pan[1],baseW/zoom,baseH/zoom];svg.setAttribute('viewBox',view.join(' '));const unit=view[2]/box.width;
- let html='<defs><pattern id="grid-pattern" width="1" height="1" patternUnits="userSpaceOnUse"><path d="M 1 0 H 0 V 1" fill="none" stroke="#304337" stroke-width=".024"/></pattern></defs>';
+ let html='<defs><pattern id="grid-pattern" width="1" height="1" patternUnits="userSpaceOnUse"><path d="M 1 0 H 0 V 1" fill="none" stroke="#3e3e3e" stroke-width=".024"/></pattern></defs>';
  if($('#grid').checked)html+='<rect x="-1000" y="-1000" width="2000" height="2000" fill="url(#grid-pattern)"/>';
  html+=`<g transform="scale(1 -1)" opacity="${pending?.4:1}">`;
- if(layout!=='diagonal')r?.blocks.forEach((e,i)=>{const color=mono?'#9eaf8e':e.type==='block'?'#a5b691':e.type==='slab'?'#d3b981':'#6b8a66';html+=`<polygon class="tile ${selected===i?'selected':''}" data-index="${i}" points="${polygon(e).map(a=>a.join(',')).join(' ')}" fill="${color}" stroke="#26392c" stroke-width=".025"><title>${describe(e)}</title></polygon>`;});html+='</g>';
- if($('#reference').checked)for(const [points,color,dash]of [[c.points,'#e5a27c',''],[c.inner,'#8bbbd7','5 4']])html+=`<polyline points="${points.map(([x,y])=>`${x},${-y}`).join(' ')}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-dasharray="${dash}" pointer-events="none"/>`;
- if(centerLocked)html+=`<line x1="${c.w/2}" x2="${c.w/2}" y1="${view[1]}" y2="${view[1]+view[3]}" stroke="#a8d0aa" stroke-opacity=".45" stroke-dasharray="4 5" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
- if($('#handles').checked)c.handles.forEach(([x,y],i)=>{html+=`<g class="handle" data-handle="${i}" role="slider" tabindex="0" aria-label="${['Left endpoint','Bend position and rise','Right endpoint'][i]}" aria-valuemin="-32" aria-valuemax="96" aria-valuenow="${y.toFixed(1)}" aria-valuetext="x ${x.toFixed(1)}, y ${y.toFixed(1)}"><circle cx="${x}" cy="${-y}" r="${(matchMedia("(pointer:coarse)").matches?22:13)*unit}" fill="transparent"/><circle cx="${x}" cy="${-y}" r="${5.5*unit}" fill="#c1dbac" stroke="#1a2b20" stroke-width="2" vector-effect="non-scaling-stroke"/><title>${['Drag to change left end / span','Drag to move the bend left, right, up or down · Hold Shift to centre','Drag to change right end / span'][i]}</title></g>`;});
+ if(layout!=='diagonal')r?.blocks.forEach((e,i)=>{const color=mono?'#a9a9a9':e.type==='block'?'#b0b0b0':e.type==='slab'?'#bababa':'#818181';html+=`<polygon class="tile ${selected===i?'selected':''}" data-index="${i}" points="${polygon(e).map(a=>a.join(',')).join(' ')}" fill="${color}" stroke="#343434" stroke-width=".025"><title>${describe(e)}</title></polygon>`;});html+='</g>';
+ if($('#reference').checked)for(const [points,color,dash]of [[c.points,'#aeaeae',''],[c.inner,'#b3b3b3','5 4']])html+=`<polyline points="${points.map(([x,y])=>`${x},${-y}`).join(' ')}" fill="none" stroke="${color}" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-dasharray="${dash}" pointer-events="none"/>`;
+ if(centerLocked)html+=`<line x1="${c.w/2}" x2="${c.w/2}" y1="${view[1]}" y2="${view[1]+view[3]}" stroke="#c5c5c5" stroke-opacity=".45" stroke-dasharray="4 5" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
+ if($('#handles').checked)c.handles.forEach(([x,y],i)=>{html+=`<g class="handle" data-handle="${i}" role="slider" tabindex="0" aria-label="${['Left endpoint','Bend position and rise','Right endpoint','Extra bend'][i]}" aria-valuemin="-32" aria-valuemax="96" aria-valuenow="${y.toFixed(1)}" aria-valuetext="x ${x.toFixed(1)}, y ${y.toFixed(1)}"><circle cx="${x}" cy="${-y}" r="${(matchMedia("(pointer:coarse)").matches?22:13)*unit}" fill="transparent"/><circle cx="${x}" cy="${-y}" r="${5.5*unit}" fill="#d2d2d2" stroke="#272727" stroke-width="2" vector-effect="non-scaling-stroke"/><title>${['Drag to change left end / span','Drag to move the bend left, right, up or down · Hold Shift to centre','Drag to change right end / span','Drag the extra bend'][i]}</title></g>`;});
  const focusedHandle=document.activeElement?.dataset.handle;svg.innerHTML=html;if(focusedHandle!==undefined)svg.querySelector(`[data-handle="${focusedHandle}"]`)?.focus({preventScroll:true});$('#view-title').textContent=layout==='straight'?({circle:'Circular',ellipse:'Elliptical',custom:'Custom'}[p.type])+' roof':'Profile editor';$('#dimensions').textContent=`${c.w.toFixed(1)} wide`;$('#drag-hint').hidden=!$('#handles').checked;
  $('.reference-key').classList.toggle('hidden',!$('#reference').checked);
  if(r){$('#outer-error').textContent=r.outerRms.toFixed(3);$('#inner-error').textContent=r.innerRms.toFixed(3);for(const [id,pred]of [['blocks',e=>e.type==='block'],['slabs',e=>e.type==='slab'],['stairs',e=>['left','right'].includes(e.type)]])$('#'+id).textContent=r.blocks.filter(pred).length;}
  if(layout!=='straight'){const model=scene();if(model){for(const [id,pred]of [['blocks',e=>e.type==='block'],['slabs',e=>e.type==='slab'],['stairs',e=>['left','right'].includes(e.type)]])$('#'+id).textContent=model.blocks.filter(pred).length;$('#outer-error').textContent=model.errors.outerRms.toFixed(3);$('#inner-error').textContent=model.errors.innerRms.toFixed(3);}}
 }
-function setHandle(index,dx,dy,original,originalCurve,center=false){
- if(index===1&&(center||centerLocked))dx=originalCurve.w/2-originalCurve.handles[1][0];
- p={...original};const w=clamp((originalCurve.span??originalCurve.w)+(index===0?-dx:index===2?dx:0),4,128),hs=originalCurve.handles.map(a=>a[1]);
- if(index===1&&(original.type==='custom'||Math.abs(dx)>.2)){p.type='custom';p.width=w;p.left=hs[0];p.right=hs[2];p.middle=clamp(hs[1]+dy,-32,96);p.bend=clamp(100*(originalCurve.handles[1][0]-(originalCurve.offset??0)+dx)/w,10,90);}
- else if(index!==1&&Math.abs(dy)>.2){p.type='custom';p.width=w;p.bend=100*(originalCurve.handles[1][0]-(originalCurve.offset??0))/(originalCurve.span??originalCurve.w);p.left=hs[0];p.middle=hs[1];p.right=hs[2];p[index===0?'left':'right']=clamp(hs[index]+dy,-32,96);}
- else if(p.type==='circle'){
-  if(index===1){const rise=clamp(hs[1]+dy-4,Math.max(.2,w*w/1024),w/2);p.radius=(w*w/4+rise*rise)/(2*rise);p.extent=4*Math.atan(2*rise/w)*180/Math.PI;}
-  else p.radius=clamp(w/(2*Math.sin(p.extent*Math.PI/360)),2,128);
- }else if(p.type==='ellipse'){p.width=w;if(index===1)p.height=clamp(hs[1]+dy-4,1,64);}
- else{p.width=w;if(index===1)p.middle=clamp(hs[1]+dy,-32,96);}
- controls();calculate();
-}
+function setHandle(index,dx,dy,original,originalCurve,center=false){p=editCurveHandle(original,index,dx,dy,{originalCurve,center:center||centerLocked});controls();calculate();}
 for(const event of ['keydown','keyup'])document.addEventListener(event,e=>{if(e.key==='Shift'&&drag?.handle===1){e.preventDefault();setHandle(1,drag.dx,drag.dy,drag.original,drag.c,e.shiftKey);}});
 $('#center-lock').onclick=()=>{centerLocked=!centerLocked;$('#center-lock').setAttribute('aria-pressed',String(centerLocked));$('#center-lock').textContent=centerLocked?'Unlock centre':'Lock centre';if(centerLocked){$('#handles').checked=true;setHandle(1,0,0,{...p},curve({...p,layout}),true);}else{controls();render();}};
 const svg=$('#preview');function world(e){return new DOMPoint(e.clientX,e.clientY).matrixTransform(svg.getScreenCTM().inverse());}
@@ -64,7 +51,7 @@ svg.onpointerup=e=>{if(!drag)return;const handle=drag.handle;if(!drag.moved&&han
 svg.onpointercancel=()=>{drag=null;frozenView=null;render();};
 svg.onkeydown=e=>{const h=e.target.closest('[data-handle]');if(!h||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();const i=+h.dataset.handle,d=e.shiftKey?1:.5;setHandle(i,e.key==='ArrowLeft'?-d:e.key==='ArrowRight'?d:0,e.key==='ArrowUp'?d:e.key==='ArrowDown'?-d:0,{...p},curve({...p,layout}));svg.querySelector(`[data-handle="${i}"]`)?.focus();};
 svg.addEventListener('wheel',e=>{e.preventDefault();zoom=clamp(zoom*Math.exp(-e.deltaY*.001),.5,12);render();},{passive:false});
-$('#type').onchange=e=>{const c=curve({...p,layout});p.type=e.target.value;p.width=clamp(c.span??c.w,4,128);p.height=clamp(c.h-4,1,64);p.bend=100*(c.handles[1][0]-(c.offset??0))/(c.span??c.w);p.left=c.handles[0][1];p.middle=c.handles[1][1];p.right=c.handles[2][1];zoom=1;pan=[0,0];controls();calculate();};
+$('#type').onchange=e=>{p=changeCurveType(p,e.target.value);zoom=1;pan=[0,0];controls();calculate();};
 $('#thickness').oninput=e=>{if(e.target.value===''||!Number.isFinite(+e.target.value))return;p.thickness=clamp(+e.target.value,1,6);calculate();};
 for(const id of ['reference','grid','handles'])$('#'+id).onchange=render;$('#baseline').onchange=calculate;
 $('#mono').onclick=()=>{mono=!mono;$('#mono').setAttribute('aria-pressed',String(mono));document.body.classList.toggle('mono',mono);render();};
@@ -93,4 +80,21 @@ $('#portrait-trigger').onclick=()=>$('#portrait-dialog').showModal();
 $('#portrait-close').onclick=()=>$('#portrait-dialog').close();
 $('#portrait-dialog').onclick=e=>{if(e.target===$('#portrait-dialog')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}};
 
-for(const name of ['curve','frame'])$('#'+name+'-tab').onclick=()=>{const active=name==='frame';setSettings(false);document.body.classList.toggle('frame-active',active);$('#frame-panel').hidden=!active;$('#curve-tab').setAttribute('aria-pressed',String(!active));$('#frame-tab').setAttribute('aria-pressed',String(active));if(!active)render();};
+
+let activeTab='curve';
+function activateWorkspace(name){activeTab=name;setSettings(false);document.body.classList.toggle('frame-active',name!=='curve');$('#frame-panel').hidden=name!=='frame';$('#bridge-panel').hidden=name!=='bridge';for(const tab of ['curve','frame','bridge'])$('#'+tab+'-tab').setAttribute('aria-pressed',String(tab===name));if(name==='curve')render();}
+for(const name of ['curve','frame','bridge'])$('#'+name+'-tab').onclick=()=>activateWorkspace(name);
+function captureWorkspace(){const house=$('#frame-panel').contentWindow.houseRoofState,bridge=$('#bridge-panel').contentWindow.bridgeState;if(!house||!bridge)throw Error('The editors are still loading. Try again in a moment.');return {activeTab,curves:{params:{...p},layout,depth:roofDepth,mode3d,mono,locked:centerLocked,zoom,pan:[...pan],camera:three.getState(),display:Object.fromEntries(['reference','grid','handles','baseline'].map(id=>[id,$('#'+id).checked]))},house:house.capture(),bridge:bridge.capture()};}
+function restoreWorkspace(input){const s=validateBlueprint(input).state;const house=$('#frame-panel').contentWindow.houseRoofState,bridge=$('#bridge-panel').contentWindow.bridgeState;if(!house||!bridge)throw Error('The editors are still loading.');const c=s.curves;p={...c.params};layout=c.layout;roofDepth=c.depth;mono=c.mono;centerLocked=c.locked;zoom=c.zoom;pan=[...c.pan];drag=null;frozenView=null;sceneCache=null;$('#layout').value=layout;$('#depth').value=roofDepth;$('#thickness').value=p.thickness;$('#mono').setAttribute('aria-pressed',String(mono));document.body.classList.toggle('mono',mono);$('#center-lock').setAttribute('aria-pressed',String(centerLocked));$('#center-lock').textContent=centerLocked?'Unlock centre':'Lock centre';for(const [id,value]of Object.entries(c.display))$('#'+id).checked=value;controls();setView(c.mode3d);three.setState(c.camera);house.restore(s.house);bridge.restore(s.bridge);activateWorkspace(s.activeTab);calculate();}
+globalThis.designWorkspace={capture:captureWorkspace,restore:restoreWorkspace,export:()=>encodeBlueprint(captureWorkspace()),import:text=>restoreWorkspace(decodeBlueprint(text))};
+
+$('#extra-point').onclick=()=>{p=toggleExtraPoint(p);controls();calculate();};
+// Saved versions are local to this browser/origin; JSON blueprints are portable.
+function versionMessage(text){$('#versions-status').textContent=text;}
+function refreshVersions(){const list=$('#version-list');list.replaceChildren();try{const versions=readVersions(localStorage);if(!versions.length){const item=document.createElement('p');item.textContent='No saved versions yet.';list.append(item);}for(const v of versions.toReversed()){const row=document.createElement('div');row.className='version-row';const label=document.createElement('span');label.textContent=v.name;label.title=v.savedAt;const restore=document.createElement('button');restore.textContent='Restore';restore.onclick=()=>{try{restoreWorkspace(v.blueprint);$('#versions-dialog').close();}catch(e){versionMessage(e.message);}};const remove=document.createElement('button');remove.textContent='Delete';remove.setAttribute('aria-label','Delete '+v.name);remove.onclick=()=>{try{localStorage.setItem(versionsKey,JSON.stringify(readVersions(localStorage).filter(item=>item.id!==v.id)));refreshVersions();}catch{versionMessage('Browser storage is unavailable. Export a blueprint instead.');}};row.append(label,restore,remove);list.append(row);}}catch{versionMessage('Saved versions are unavailable in this browser. Use blueprint export/import instead.');}}
+$('#versions-open').onclick=()=>{versionMessage('');refreshVersions();$('#versions-dialog').showModal();};
+$('#versions-close').onclick=()=>$('#versions-dialog').close();
+$('#save-version').onclick=()=>{try{const blueprint=decodeBlueprint(encodeBlueprint(captureWorkspace())),name=$('#version-name').value.trim()||'Version '+new Date().toLocaleString();appendVersion(localStorage,{id:globalThis.crypto?.randomUUID?.()??String(Date.now()),name:name.slice(0,100),savedAt:new Date().toISOString(),blueprint});refreshVersions();versionMessage('Version saved in this browser.');}catch(e){versionMessage(e.name==='QuotaExceededError'||e.name==='SecurityError'?'Browser storage is unavailable or full. Export a blueprint instead.':e.message);}};
+$('#export-blueprint').onclick=()=>{try{const json=encodeBlueprint(captureWorkspace()),url=URL.createObjectURL(new Blob([json],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='minecraft-design.blueprint.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);versionMessage('Blueprint exported with editable settings for all tabs.');}catch(e){versionMessage(e.message);}};
+$('#import-blueprint').onclick=()=>$('#blueprint-file').click();
+$('#blueprint-file').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{if(file.size>1048576)throw Error('Blueprint must be smaller than 1 MB.');const blueprint=decodeBlueprint(await file.text());restoreWorkspace(blueprint);$('#versions-dialog').close();}catch(error){versionMessage(error.message);}finally{e.target.value='';}};

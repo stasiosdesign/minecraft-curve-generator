@@ -6,7 +6,7 @@ import {roofMesh} from './dist/view3d.js';
 const base=createFrame();assert.equal(base.maxX,21);assert.equal(base.innerHeight,9);assert.equal(base.outerHeight,5);assert.equal(base.centerHeight,11);assert.equal(base.center.length,4);
 const keys=new Set(base.blocks.map(b=>[b.x,b.y,b.z].join(',')));for(let x=0;x<21;x++)for(let z=0;z<21;z++)if(x<=4||x>=16||z<=4||z>=16)assert(keys.has(`${x},20,${z}`));
 const def=frameCurve(frameCurveDefaults);assert.equal(def.roof.gaps,0);assert(def.c.fn(4.5)<(def.c.fn(0)+def.c.fn(9))/2,'default convex');
-for(const thickness of [1,2,4])for(const edit of [{},{middle:-3,end:-14},{middle:12,end:-12,bend:70,run:6}]){
+for(const thickness of [1,2,4])for(const edit of [{},{middle:-3,right:-14},{middle:12,right:-12,bend:70,width:6}]){
  const p={...frameCurveDefaults,...edit,thickness},r=frameCurve(p).roof;
  for(const col of r.columns){assert(Math.max(...col.high)-Math.min(...col.low)<=thickness+1e-9,'never exceed requested vertical thickness');}
  assert.equal(r.columns[0].low[0],0,'start anchored without flat footing');
