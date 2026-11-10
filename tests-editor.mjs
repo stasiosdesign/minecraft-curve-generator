@@ -5,9 +5,9 @@ import {frameCurve,frameReference,frameCurveDefaults} from './dist/frame-curve.j
 import {solve} from './dist/optimizer.js';
 for(const type of ['circle','ellipse','custom']){
  const p={...curveDefaults,type,width:18,radius:12,height:7},c=curve(p),h=frameReference(p);
- for(let i=0;i<c.points.length;i++)assert(Math.abs((c.points[i][1]-c.handles[0][1]+p.thickness)-h.points[i][1])<1e-8);
- assert.equal(h.handles[0][0],0);assert(Math.abs(h.handles[0][1]-p.thickness)<1e-8);
- for(const index of [1,2]){const free=editCurveHandle(p,index,2,3),anchored=editCurveHandle(p,index,2,3,{lockStart:true});const a=curve(free),b=frameReference(anchored);assert.equal(a.span,b.span);for(let i=0;i<a.points.length;i++)assert(Math.abs(a.points[i][1]-a.handles[0][1]+p.thickness-b.points[i][1])<1e-7);}
+ const lift=h.points[0][1]-c.handles[0][1];for(let i=0;i<c.points.length;i++)assert(Math.abs((c.points[i][1]+lift)-h.points[i][1])<1e-8,'House Roof line keeps the drawn shape');assert(h.points[0][1]>=p.thickness-1e-8&&h.points[0][1]<=p.thickness*Math.hypot(1,3)+1e-8,'line starts at least one thickness above the anchor');for(let i=0;i<h.inner.length;i++){const [ix,iy]=h.inner[i];assert(Number.isFinite(ix)&&Number.isFinite(iy)&&Math.abs(Math.hypot(ix-h.points[i][0],iy-h.points[i][1])-p.thickness)<.02,'underside is one thickness from the line, even at vertical tangents');}
+ assert.equal(h.handles[0][0],0);assert(Math.abs(h.handles[0][1]-h.points[0][1])<1e-8,'start handle sits on the line start');
+ for(const index of [1,2]){const free=editCurveHandle(p,index,2,3),anchored=editCurveHandle(p,index,2,3,{lockStart:true});const a=curve(free),b=frameReference(anchored);assert.equal(a.span,b.span);const rise=b.points[0][1]-a.handles[0][1];for(let i=0;i<a.points.length;i++)assert(Math.abs(a.points[i][1]+rise-b.points[i][1])<1e-7);}
  assert.deepEqual(editCurveHandle(p,0,8,8,{lockStart:true}),p);
  const withPoint=toggleExtraPoint(p),q=editCurveHandle(withPoint,3,-1,5),extra=curve(q);assert.equal(extra.handles.length,4);
  for(const [x,y]of extra.handles)assert(Math.abs(extra.fn(x)-y)<1e-9);

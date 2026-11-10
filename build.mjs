@@ -8,19 +8,26 @@ const app=core+'\n'+shared+'\nglobalThis.CURVE_WORKER_SOURCE='+JSON.stringify(wo
 const css=(await read('dist/style.css')).replace(/^@import[^;]+;\s*/, '');
 const portrait='data:image/png;base64,'+(await readFile(new URL('dist/assets/susan-boyle.png',import.meta.url))).toString('base64');
 const frameWorker=core+'\n'+plain(await read('dist/frame-curve.js'))+'\nself.onmessage=({data})=>{try{self.postMessage({roof:frameCurve(data).roof});}catch(e){self.postMessage({error:e.message});}};';
-const frameSource=core+'\n'+shared+'\nglobalThis.FRAME_WORKER_SOURCE='+JSON.stringify(frameWorker)+';\n'+(await Promise.all(['layout','view3d','frame','frame-curve','frame-app'].map(name=>read(`dist/${name}.js`)))).map(plain).join('\n');
+const frameSource=core+'\n'+shared+'\nglobalThis.FRAME_WORKER_SOURCE='+JSON.stringify(frameWorker)+';\n'+(await Promise.all(['layout','view3d','frame','angle-roof','frame-section','frame-curve','frame-app'].map(name=>read(`dist/${name}.js`)))).map(plain).join('\n');
 const frameHtml=(await read('frame-template.html')).replace('<script type="module" src="frame-app.js"></script>',()=>`<script>(()=>{
 ${frameSource}
 })();</script>`);
 await writeFile(new URL('dist/frame.html',import.meta.url),frameHtml);
-const bridgeSource=(await Promise.all(['layout','view3d','ravine','bridge-app'].map(name=>read(`dist/${name}.js`)))).map(plain).join('\n');
+const bridgeSource=(await Promise.all(['layout','view3d','ravine','terrain-view','bridge-app'].map(name=>read(`dist/${name}.js`)))).map(plain).join('\n');
 const bridgeHtml=(await read('bridge-template.html')).replace('<script type="module" src="bridge-app.js"></script>',()=>`<script>(()=>{
 ${bridgeSource}
 })();</script>`);
 await writeFile(new URL('dist/bridge.html',import.meta.url),bridgeHtml);
+// Bridge 1 bundles the Curves tab's curve maths, solver, editor and worker with its own app.
+const bridge1Source=core+'\n'+shared+'\nglobalThis.CURVE_WORKER_SOURCE='+JSON.stringify(worker)+';\n'+(await Promise.all(['layout','view3d','bridge1','bridge1-app'].map(name=>read(`dist/${name}.js`)))).map(plain).join('\n');
+const bridge1Html=(await read('bridge1-template.html')).replace('<script type="module" src="bridge1-app.js"></script>',()=>`<script>(()=>{
+${bridge1Source}
+})();</script>`);
+await writeFile(new URL('dist/bridge1.html',import.meta.url),bridge1Html);
+const bridge1Attribute=bridge1Html.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;');
 const bridgeAttribute=bridgeHtml.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;');
 const frameAttribute=frameHtml.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;');
-const html=(await read('template.html')).replace('FRAME_DOCUMENT',()=>frameAttribute).replace('BRIDGE_DOCUMENT',()=>bridgeAttribute).replaceAll('assets/susan-boyle.png',portrait).replace('<link rel="stylesheet" href="style.css">',()=>`<style>${css}</style>`).replace('<script type="module" src="app.js"></script>',()=>`<script>\n(()=>{\n${app}\n})();\n</script>`);
+const html=(await read('template.html')).replace('FRAME_DOCUMENT',()=>frameAttribute).replace('BRIDGE_DOCUMENT',()=>bridgeAttribute).replace('BRIDGE1_DOCUMENT',()=>bridge1Attribute).replaceAll('assets/susan-boyle.png',portrait).replace('<link rel="stylesheet" href="style.css">',()=>`<style>${css}</style>`).replace('<script type="module" src="app.js"></script>',()=>`<script>\n(()=>{\n${app}\n})();\n</script>`);
 await writeFile(new URL('dist/index.html',import.meta.url),html);
 await writeFile(new URL('index.html',import.meta.url),html);
 console.log('Built self-contained calculator: dist/index.html and index.html');

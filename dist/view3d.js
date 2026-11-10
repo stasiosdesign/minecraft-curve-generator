@@ -9,6 +9,8 @@ export function roofMesh(blocks,depth=1,placed=false){
  const pts=[[u,v],[u+w,v],[u+w,v+h],[u,v+h]].map(([a,b])=>{const p=[];p[g.axis]=g.plane/2;p[g.axes[0]]=a/2;p[g.axes[1]]=b/2;return p;}),normal=[0,0,0];normal[g.axis]=g.sign;faces.push({pts,normal,id:g.id,z:placements[g.id].z});}
  return faces;
 }
+// Shared camera presets for every 3D view (roofs and terrain).
+export function cameraPreset(name){return {yaw:name==='front'||name==='top'?0:-.62,pitch:name==='top'?Math.PI/2:name==='inside'?-.6:name==='front'?0:.38,zoom:1,offset:[0,0]};}
 export function createRoof3D(canvas,onSelect){
  const ctx=canvas.getContext('2d');let yaw=-.62,pitch=.38,zoom=1,offset=[0,0],drag=null,roof,depth=12,mesh=[],options={},projected=[],frame;
  const colors={block:'#b0b0b0',slab:'#bababa',left:'#818181',right:'#818181'};
@@ -28,7 +30,7 @@ export function createRoof3D(canvas,onSelect){
  canvas.oncontextmenu=e=>e.preventDefault();canvas.onpointerdown=e=>{drag={x:e.clientX,y:e.clientY,yaw,pitch,offset:[...offset],pan:e.shiftKey||e.button===2,moved:false};canvas.setPointerCapture(e.pointerId);e.preventDefault();};canvas.onpointermove=e=>{if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;drag.moved||=Math.hypot(dx,dy)>3;if(drag.pan)offset=[drag.offset[0]+dx,drag.offset[1]+dy];else{yaw=drag.yaw+dx*.008;pitch=Math.max(-1.5,Math.min(1.5,drag.pitch+dy*.008));}schedule();};
  canvas.onpointerup=e=>{if(drag&&!drag.moved){const rect=canvas.getBoundingClientRect(),x=e.clientX-rect.left,y=e.clientY-rect.top;for(let i=projected.length-1;i>=0;i--){const f=projected[i];let inside=false;for(let j=0,k=f.pts.length-1;j<f.pts.length;k=j++){const a=f.pts[j],b=f.pts[k];if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])inside=!inside;}if(inside){onSelect(roof.blocks[f.id],f.z);break;}}}drag=null;if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);};canvas.onpointercancel=()=>drag=null;
  canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.3,Math.min(12,zoom*Math.exp(-e.deltaY*.001)));schedule();},{passive:false});canvas.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();yaw+=e.key==='ArrowLeft'?-.12:e.key==='ArrowRight'?.12:0;pitch=Math.max(-1.5,Math.min(1.5,pitch+(e.key==='ArrowUp'?.12:e.key==='ArrowDown'?-.12:0)));schedule();};
- return {getState(){return {yaw,pitch,zoom,offset:[...offset]};},setState(s){yaw=s.yaw;pitch=s.pitch;zoom=s.zoom;offset=[...s.offset];schedule();},update(r,d,o){if(r!==roof||d!==depth){roof=r;depth=d;mesh=r?(r.mesh??roofMesh(r.blocks,d,!!r.placed)):[];if(!r&&ctx)ctx.clearRect(0,0,canvas.width,canvas.height);}options=o;schedule();},zoom(factor){zoom=Math.max(.3,Math.min(12,zoom*factor));schedule();},fit(){zoom=1;offset=[0,0];schedule();},preset(name){yaw=name==='front'||name==='top'?0:-.62;pitch=name==='top'?Math.PI/2:name==='inside'?-.6:name==='front'?0:.38;zoom=1;offset=[0,0];schedule();}};
+ return {getState(){return {yaw,pitch,zoom,offset:[...offset]};},setState(s){yaw=s.yaw;pitch=s.pitch;zoom=s.zoom;offset=[...s.offset];schedule();},update(r,d,o){if(r!==roof||d!==depth){roof=r;depth=d;mesh=r?(r.mesh??roofMesh(r.blocks,d,!!r.placed)):[];if(!r&&ctx)ctx.clearRect(0,0,canvas.width,canvas.height);}options=o;schedule();},zoom(factor){zoom=Math.max(.3,Math.min(12,zoom*factor));schedule();},fit(){zoom=1;offset=[0,0];schedule();},preset(name){({yaw,pitch,zoom,offset}=cameraPreset(name));schedule();}};
 }
 
 

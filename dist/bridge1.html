@@ -1,0 +1,461 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bridge 1 designer</title><style>
+:root{color-scheme:dark;font:13px system-ui,sans-serif;color:#dddddd;background:#080808}*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}body{display:grid;grid-template-rows:minmax(0,1fr) auto;background:#080808}
+button,input,select{font:inherit;color:inherit;background:#242424;border:1px solid #3b3b3b;border-radius:5px}button{cursor:pointer;min-height:34px;padding:6px 11px}button:hover{background:#2e2e2e}button[aria-pressed=true]{background:#bcbcbc;color:#181818;border-color:#bcbcbc}button:disabled{opacity:.45;cursor:default}button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible,[tabindex]:focus-visible{outline:2px solid #cecece;outline-offset:2px}[hidden]{display:none!important}
+/* Settings panel: one part of the bridge at a time. */
+main{display:grid;grid-template-columns:268px minmax(0,1fr);min-height:0}aside{display:flex;flex-direction:column;gap:12px;padding:12px;min-height:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#444444 transparent;border-right:1px solid #2e2e2e;background:#141414}aside section{display:flex;flex-direction:column;gap:12px}
+.segmented{display:flex;gap:2px;padding:2px;border:1px solid #333333;border-radius:6px;background:#0d0d0d}.segmented button{flex:1;border:0;background:transparent;min-height:32px;padding:5px 8px}.segmented button[aria-pressed=true]{background:#bcbcbc;color:#181818}
+.field{display:flex;flex-direction:column;gap:6px;font-size:12px;color:#c5c5c5}select{width:100%;min-height:34px;padding:6px 8px;background:#222222;border:1px solid #3b3b3b;border-radius:5px}
+.control-head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;color:#c5c5c5}.control-head input,.inline input,.pair input{width:68px;min-height:32px;padding:5px 7px;font-variant-numeric:tabular-nums}.control input[type=range]{width:100%;margin:7px 0 0;min-height:22px;padding:0;border:0;background:transparent;accent-color:#bbbbbb}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:6px}.inline{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;color:#c5c5c5}.check{display:flex;align-items:center;gap:8px;font-size:12px;color:#cfcfcf;min-height:30px}.check input{width:16px;height:16px;margin:0;accent-color:#aaaaaa}.split{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pair{display:grid;grid-template-columns:minmax(0,1fr) 68px 68px;align-items:center;gap:6px;font-size:12px;color:#c5c5c5}.pair.head{font-size:11px;color:#8d8d8d}.pair.head span:not(:first-child){text-align:center}
+.divider{border-top:1px solid #2a2a2a;margin:0}
+/* Canvas panel, as in the Curves tab. */
+.canvas-panel{display:grid;grid-template-rows:auto minmax(0,1fr) 26px;min-width:0;min-height:0}.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid #2e2e2e;background:#141414}.view-switch{display:flex;gap:2px;padding:2px;border:1px solid #333333;border-radius:6px;background:#0d0d0d}.view-switch button{border:0;background:transparent;min-height:30px;min-width:40px;padding:4px 10px}.view-switch button[aria-pressed=true]{background:#bcbcbc;color:#181818}
+#depth-control{display:flex;align-items:center;gap:7px;font-size:11px;color:#aaaaaa}#depth{width:56px;min-height:32px;padding:4px 6px}#camera-controls{display:flex;gap:5px}#view-title{color:#aaaaaa;font-size:11px;margin-right:auto}.mode3d #view-title{display:none}.mode3d #camera-controls{margin-right:auto}.zoom{display:flex;gap:5px}.zoom button{min-width:38px}#open-controls{display:none}
+.display-settings{position:relative}.display-settings summary{display:flex;align-items:center;gap:8px;min-height:34px;padding:5px 10px;border:1px solid #3b3b3b;border-radius:5px;background:#242424;font-size:12px;cursor:pointer;list-style:none}.display-settings summary::-webkit-details-marker{display:none}.display-settings summary::after{content:"";width:5px;height:5px;border-right:1.5px solid #9a9a9a;border-bottom:1.5px solid #9a9a9a;transform:rotate(45deg);margin:-3px 0 0 2px}.display-settings[open] summary{background:#303030;border-color:#6a6a6a}.display-settings[open] summary::after{transform:rotate(-135deg);margin-top:3px}.display-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:30;width:220px;display:flex;flex-direction:column;gap:2px;padding:10px 12px 12px;background:#181818;border:1px solid #444444;border-radius:6px;box-shadow:0 12px 32px #000000aa}.display-menu #mono{margin-top:8px}
+#viewport{position:relative;min-height:0;overflow:hidden;background:#080808}#preview,#preview3d{position:absolute;width:100%;height:100%;touch-action:none;cursor:grab}#preview:active,#preview3d:active{cursor:grabbing}.tile{cursor:pointer}.tile:hover,.tile.selected{filter:brightness(1.2)}.handle{cursor:grab;touch-action:none}
+#busy{position:absolute;left:50%;top:12px;transform:translateX(-50%);background:#2f2f2fed;border:1px solid #545454;color:#dedede;border-radius:10px;padding:7px 14px;font-size:11px;pointer-events:none;white-space:nowrap}#drag-hint{position:absolute;bottom:12px;left:14px;font-size:10px;color:#939393;pointer-events:none}
+.canvas-footer{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:0 14px;border-top:1px solid #2e2e2e;font-size:10px;color:#a5a5a5;background:#080808}#selected{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 14px;border-top:1px solid #2e2e2e;background:#141414;font-size:11px;color:#b5b5b5}.counts{display:flex;gap:18px;flex-wrap:wrap}.counts span{display:flex;align-items:center;gap:6px}.counts b{color:#eaeaea;font-weight:600;font-variant-numeric:tabular-nums}.swatch{display:inline-block;width:9px;height:9px;border-radius:3px}.mono .swatch{display:none}.actions{display:flex;gap:6px}#export{background:#bcbcbc;color:#171717;border-color:#bcbcbc}
+#close-controls,#sheet-shade{display:none}
+@media(pointer:coarse){button{min-height:44px}input[type=number],select{min-height:44px;font-size:16px}.control input[type=range]{min-height:30px}}
+@media(max-width:760px){main{display:block;position:relative}.canvas-panel{height:100%}aside{display:none;position:absolute;left:0;right:0;bottom:0;z-index:4;max-height:88%;border:1px solid #4a4a4a;border-radius:10px 10px 0 0;padding:12px}.editing aside{display:flex}.editing #sheet-shade{display:block;position:absolute;inset:0;z-index:3;background:#00000099;border:0;border-radius:0}#close-controls{display:block;align-self:flex-end;min-height:38px}#open-controls{display:block}#view-title,#drag-hint{display:none}.mode3d #camera-controls{order:5;flex-basis:100%;margin:0}.mode3d #camera-controls button{flex:1}.display-menu{right:auto;left:0}footer{flex-wrap:wrap}.counts{gap:12px}}
+</style></head><body>
+<main><button id="sheet-shade" aria-label="Close settings"></button><aside id="controls" aria-label="Bridge 1 settings"><button id="close-controls">Done</button>
+<div class="segmented" role="group" aria-label="Bridge part"><button id="part-lower" aria-pressed="true" title="Lower curve">Lower</button><button id="part-beams" aria-pressed="false" title="Side beams">Beams</button><button id="part-upper" aria-pressed="false" title="Upper curve">Upper</button></div>
+<section id="lower-panel"><label class="field">Curve<select id="lower-type"><option value="circle">Circular arc</option><option value="ellipse">Elliptical arc</option><option value="custom">Custom curve</option></select></label><div id="lower-controls"></div><div class="row"><button id="lower-extra">Add point</button><button id="lower-lock" aria-pressed="false" title="Lock the middle point to the centre line">Lock centre</button></div><label class="inline">Thickness<input id="lower-thickness" type="number" min="1" max="6" step=".5" value="2" title="Vertical separation of the outside and inside reference curves, in blocks"></label></section>
+<section id="beams-panel" hidden><label class="check"><input id="beams-linked" type="checkbox" checked> Same on both sides</label><div id="beam-controls"></div></section>
+<section id="upper-panel" hidden><label class="field">Curve<select id="upper-type"><option value="circle">Circular arc</option><option value="ellipse">Elliptical arc</option><option value="custom">Custom curve</option></select></label><div id="upper-controls"></div><div class="row"><button id="upper-extra">Add point</button><button id="upper-lock" aria-pressed="false" title="Lock the middle point to the centre line">Lock centre</button></div><label class="inline">Thickness<input id="upper-thickness" type="number" min="1" max="6" step=".5" value="2" title="Vertical separation of the outside and inside reference curves, in blocks"></label><label class="inline">Height<input id="upper-level" type="number" min="-256" max="256" step="1" value="30" title="Height of the upper curve's ends"></label><hr class="divider"><div class="split"><label class="check" title="Upside down, as a mirror image of an arch"><input id="upper-mirrored" type="checkbox" checked> Mirrored</label><button id="upper-mirror" title="Replace the upper curve with a mirror image of the lower curve">Mirror lower</button></div></section>
+</aside>
+<section class="canvas-panel"><div class="toolbar"><div class="view-switch"><button id="view-2d" aria-pressed="true">2D</button><button id="view-3d" aria-pressed="false">3D</button></div><label id="depth-control" hidden>Depth <input id="depth" type="number" min="1" max="32" value="12"></label><div id="camera-controls" hidden><button id="outside">Outside</button><button id="inside">Inside</button><button id="top">Top</button></div><span id="view-title">Bridge elevation</span><button id="open-controls" aria-controls="controls">Settings</button><details class="display-settings"><summary title="Display &amp; accuracy">Display</summary><div class="display-menu"><label class="check"><input id="reference" type="checkbox" checked> Reference curves</label><label class="check"><input id="grid" type="checkbox" checked> Grid</label><label class="check"><input id="handles" type="checkbox" checked> Curve handles</label><label class="check"><input id="baseline" type="checkbox"> Full blocks only</label><button id="mono" aria-pressed="false">Single colour</button></div></details><div class="zoom"><button id="minus" aria-label="Zoom out">−</button><button id="fit">Fit</button><button id="plus" aria-label="Zoom in">+</button></div></div>
+<div id="viewport"><svg id="preview" aria-label="Bridge elevation with editable lower and upper curves"></svg><canvas id="preview3d" hidden tabindex="0" aria-label="Interactive 3D bridge. Drag to orbit, shift-drag to pan, scroll to zoom. Arrow keys rotate."></canvas><div id="busy" role="status" hidden>Finding the best fit…</div><div id="drag-hint">Drag handles to shape · Drag grid to pan</div></div><div class="canvas-footer"><span id="selected">1 square = 1 block</span><span id="dimensions"></span></div></section></main>
+<footer><div class="counts"><span><i class="swatch" style="background:#b0b0b0"></i><b id="blocks">—</b> blocks</span><span><i class="swatch" style="background:#818181"></i><b id="stairs">—</b> stairs</span><span><i class="swatch" style="background:#bababa"></i><b id="slabs">—</b> slabs</span><span><i class="swatch" style="background:#dedede"></i><b id="beam-count">—</b> in beams</span></div><div class="actions"><button id="reset" title="Reset Bridge 1 to the defaults">Reset</button><button id="export" disabled title="Download every block as a CSV list">CSV ↓</button></div></footer>
+<script>(()=>{
+// Occupied half-cell masks, bottom row first. No sideways slabs or wedges.
+const shapes={block:[1,1,1,1],slab:[1,1,0,0],right:[1,1,0,1],left:[1,1,1,0]};
+function polygon(e){const {x,y,type,flip}=e;let pts=type==='block'?[[0,0],[1,0],[1,1],[0,1]]:type==='slab'?[[0,0],[1,0],[1,.5],[0,.5]]:type==='right'?[[0,0],[1,0],[1,1],[.5,1],[.5,.5],[0,.5]]:[[0,0],[1,0],[1,.5],[.5,.5],[.5,1],[0,1]];return pts.map(([a,b])=>[x+a,y+(flip?1-b:b)]);}
+function elements(columns,ceiling,flip){const out=[];columns.forEach((c,x)=>{for(let y=0;y<c.base;y++)out.push({x,y,type:'block'});if(c.type!=='empty')out.push({x,y:c.base,type:c.type});});return out.map(e=>flip?{...e,y:ceiling-1-e.y,flip:true}:e);}
+
+function curve(p){
+ let w=p.width,h=p.height,fn,bend=.5;const base=4;
+ if(p.type==='circle'){const a=p.extent*Math.PI/360,r=p.radius;w=2*r*Math.sin(a);h=r*(1-Math.cos(a));fn=x=>base+Math.sqrt(Math.max(0,r*r-(x-w/2)**2))-r*Math.cos(a);}
+ else if(p.type==='ellipse')fn=x=>base+h*Math.sqrt(Math.max(0,1-(2*x/w-1)**2));
+ else {bend=Math.max(.1,Math.min(.9,(p.bend??50)/100));const left=p.left??4,right=p.right??4,middle=p.middle??16,control=2*middle-(left+right)/2;fn=x=>{const u=x/w;
+ // Monotone parameter mapping moves the bend without loops or a tangent seam.
+ const t=(1-bend)*u/(bend+(1-2*bend)*u);return (1-t)**2*left+2*(1-t)*t*control+t*t*right;};}
+ // Centre symmetric references on a valid grid reflection axis without changing their shape.
+ const symmetric=!p.extraEnabled&&(p.type!=='custom'||(Math.abs((p.left??4)-(p.right??4))<1e-9&&Math.abs(bend-.5)<1e-9));
+ const span=w,gridWidth=symmetric?(p.layout==='diagonal'?(Math.max(1,Math.ceil(w*Math.SQRT2-1e-9)-1)+1)/Math.SQRT2:Math.ceil(w-1e-9)):w,offset=(gridWidth-span)/2,raw=fn;
+ fn=x=>raw(Math.max(0,Math.min(span,x-offset)));
+ let extraX=null;
+ if(p.type==='custom'&&p.extraEnabled){
+  extraX=Math.max(.05,Math.min(.95,(p.extraPosition??75)/100));if(Math.abs(extraX-bend)<.025)extraX=bend+(extraX<bend?-.025:.025);
+  const nodes=[[0,p.left??4],[w*bend,p.middle??16],[w*extraX,p.extraHeight??12],[w,p.right??4]].sort((a,b)=>a[0]-b[0]);
+  const slopes=nodes.slice(1).map((n,i)=>(n[1]-nodes[i][1])/(n[0]-nodes[i][0]));
+  const tangents=nodes.map((n,i)=>{if(i===0)return slopes[0];if(i===nodes.length-1)return slopes.at(-1);if(slopes[i-1]*slopes[i]<=0)return 0;const a=nodes[i][0]-nodes[i-1][0],b=nodes[i+1][0]-nodes[i][0],u=2*b+a,v=b+2*a;return (u+v)/(u/slopes[i-1]+v/slopes[i]);});
+  fn=x=>{const u=Math.max(0,Math.min(w,x-offset));let i=0;while(i<nodes.length-2&&u>nodes[i+1][0])i++;const [a,ya]=nodes[i],[b,yb]=nodes[i+1],d=b-a,t=(u-a)/d;return (2*t**3-3*t*t+1)*ya+(t**3-2*t*t+t)*d*tangents[i]+(-2*t**3+3*t*t)*yb+(t**3-t*t)*d*tangents[i+1];};
+ }
+ const thickness=p.thickness??2,points=Array.from({length:513},(_,i)=>[offset+span*i/512,fn(offset+span*i/512)]),inner=points.map(([x,y])=>[x,y-thickness]);
+ return {w:gridWidth,span,offset,symmetric,h:Math.max(...points.map(a=>a[1])),min:Math.min(...inner.map(a=>a[1])),fn,points,inner,thickness,handles:[[offset,fn(offset)],[offset+span*bend,fn(offset+span*bend)],[offset+span,fn(offset+span)],...(extraX===null?[]:[[offset+span*extraX,fn(offset+span*extraX)]])]};
+}
+
+// Nearest-polyline distance with a bounding-volume tree.
+function tree(pts,lo=0,hi=pts.length-1){const slice=pts.slice(lo,hi+1),node={minX:Math.min(...slice.map(p=>p[0])),maxX:Math.max(...slice.map(p=>p[0])),minY:Math.min(...slice.map(p=>p[1])),maxY:Math.max(...slice.map(p=>p[1]))};if(hi-lo<=4)node.points=slice;else{const mid=(lo+hi)>>1;node.left=tree(pts,lo,mid);node.right=tree(pts,mid,hi);}return node;}
+function distance(x,y,root){let best=Infinity;const bound=n=>Math.max(n.minX-x,0,x-n.maxX)**2+Math.max(n.minY-y,0,y-n.maxY)**2;function visit(n){if(bound(n)>=best)return;if(n.points){for(let i=1;i<n.points.length;i++){const [a,b]=n.points[i-1],[c,d]=n.points[i],dx=c-a,dy=d-b,t=Math.max(0,Math.min(1,((x-a)*dx+(y-b)*dy)/(dx*dx+dy*dy)));best=Math.min(best,(x-a-t*dx)**2+(y-b-t*dy)**2);}}else if(bound(n.left)<bound(n.right)){visit(n.left);visit(n.right);}else{visit(n.right);visit(n.left);}}visit(root);return best;}
+// Bit masks: lower left, lower right, upper left, upper right.
+const legal=new Map([[15,{type:'block'}],[3,{type:'slab'}],[12,{type:'slab',flip:true}],[11,{type:'right'}],[7,{type:'left'}],[14,{type:'right',flip:true}],[13,{type:'left',flip:true}]]);
+function columnTiles(x,low,high,onlyBlocks){
+ if(Math.min(...high)-Math.max(...low)<.5)return null;
+ const out=[];
+ for(let y=Math.floor(Math.min(...low));y<Math.ceil(Math.max(...high));y++){
+  let mask=0;for(let j=0;j<4;j++){const yy=y+(j<2?.25:.75),side=j%2;if(yy>low[side]&&yy<high[side])mask|=1<<j;}
+  if(!mask)continue;const shape=legal.get(mask);if(!shape||(onlyBlocks&&mask!==15))return null;out.push({x,y,...shape});
+ }return out;
+}
+function profiles(min,max,upper,onlyBlocks){const out=[];for(let y=Math.floor(min)-1;y<=Math.ceil(max)+1;y++){out.push([y,y]);if(!onlyBlocks)out.push([y+.5,y+.5],upper?[y+.5,y+1]:[y+.5,y],upper?[y+1,y+.5]:[y,y+.5]);}return out;}
+function measurePlacedRoof(blocks,c,layout){
+ const top=tree(c.points),bottom=tree(c.inner),surfaces=new Map();
+ for(const e of blocks){const mask=e.type==='block'?[1,1,1,1]:e.type==='slab'?[1,1,0,0]:e.type==='right'?[1,1,0,1]:[1,1,1,0];for(let x=0;x<2;x++)for(let z=0;z<2;z++)for(let y=0;y<2;y++){const side=e.axis==='z'?z:x;if(!mask[(e.flip?1-y:y)*2+side])continue;const xx=e.x+(x+.5)/2,zz=e.z+(z+.5)/2,key=xx+','+zz,low=e.y+y/2,high=low+.5,s=surfaces.get(key);if(s){s.low=Math.min(s.low,low);s.high=Math.max(s.high,high);}else surfaces.set(key,{x:xx,z:zz,low,high});}}
+ let outer=0,inner=0;for(const s of surfaces.values()){const u=layout==='diagonal'?(s.x+s.z)/Math.SQRT2:layout==='hip'?Math.min(s.x,s.z):s.x;outer+=distance(u,s.high,top);inner+=distance(u,s.low,bottom);}return {outerRms:Math.sqrt(outer/surfaces.size),innerRms:Math.sqrt(inner/surfaces.size)};
+}
+function solve(c,{onlyBlocks=false,diagonal=false,startThickness=null,maxThickness=null,startLow=null,allowGaps=false}={}){
+ const outer=tree(c.points),inner=tree(c.inner),layers=[],n=diagonal?Math.max(1,Math.ceil(c.w*Math.SQRT2-1e-9)-1):Math.ceil(c.w-1e-9),thickness=c.thickness;
+ const at=t=>c.fn(Math.max(0,Math.min(c.w,t)));
+ const centre=diagonal?(n+1)/(2*Math.SQRT2):n/2;
+ const symmetric=startThickness===null&&startLow===null&&Math.abs(centre-c.w/2)<1e-7&&c.points.every(([x,y],i)=>Math.abs(y-c.points[c.points.length-1-i][1])<1e-7);
+ const count=symmetric?Math.ceil(n/2):n;
+ for(let x=0;x<count;x++){
+  const ys=[0,.25,.5,.75,1].map(t=>at(diagonal?(x+2*t)/Math.SQRT2:x+t)),min=Math.min(...ys),max=Math.max(...ys),top=profiles(min,max,true,onlyBlocks),bottom=profiles(min-thickness,max-thickness,false,onlyBlocks),opts=[];
+  if(x===0&&startThickness!==null){top.push([startThickness,startThickness]);bottom.push([0,0]);}
+  if(x===0&&startLow!==null){top.push([startLow+thickness,startLow+thickness]);bottom.push([startLow,startLow]);}
+  const riserCache=new Map();
+  function edgeError(a,b,xx,ref){const len=Math.abs(b-a);if(!len)return 0;const lo=Math.min(a,b),key=[lo,lo+len,xx,ref===outer?0:1].join(',');if(riserCache.has(key))return riserCache.get(key);const count=Math.max(1,Math.ceil(len*4));let cost=0;for(let j=0;j<count;j++)cost+=distance(xx,lo+len*(j+.5)/count,ref)*len/count;riserCache.set(key,cost);return cost;}
+  function surface(profile,ref){let e=0;for(let j=0;j<8;j++){if(diagonal){for(let z=0;z<4;z++)e+=distance((x+(j+.5)/8+(z+.5)/4)/Math.SQRT2,profile[j<4?0:1],ref)/32;}else e+=distance(x+(j+.5)/8,profile[j<4?0:1],ref)/8;}if(diagonal){for(let z=0;z<4;z++)e+=edgeError(profile[0],profile[1],(x+.5+(z+.5)/4)/Math.SQRT2,ref)/4;return e;}return e+edgeError(profile[0],profile[1],x+.5,ref);}
+  const tc=new Map(top.map(a=>[a,surface(a,outer)])),bc=new Map(bottom.map(a=>[a,surface(a,inner)]));
+  for(const high of top)for(const low of bottom){if(maxThickness!==null&&Math.max(...high)-Math.min(...low)>maxThickness+1e-9)continue;if(x===0&&startLow!==null&&low[0]!==startLow)continue;if(x===0&&startThickness!==null&&(low.some(y=>y!==0)||high.some(y=>y!==startThickness)))continue;if(symmetric&&n%2&&x===count-1&&(high[0]!==high[1]||low[0]!==low[1]))continue;const tiles=columnTiles(x,low,high,onlyBlocks);if(!tiles)continue;const thick=(high[0]+high[1]-low[0]-low[1])/2;const unary=tc.get(high)+bc.get(low)+.008*(thick-thickness)**2+.0002*tiles.filter(t=>t.type!=='block').length;opts.push({high,low,tiles,unary:symmetric&&n%2&&x===count-1?unary/2:unary,cost:Infinity,prev:-1});}
+  // DP is exact within these retained states, not over all possible builds.
+  opts.sort((a,b)=>a.unary-b.unary);const kept=opts.slice(0,72);
+  const bridge=opts.find(o=>Math.max(...o.low)<=Math.floor(min-thickness)&&Math.min(...o.high)>=Math.ceil(max));
+  if(bridge&&!kept.includes(bridge))kept.push(bridge);
+  const edgeCache=new Map();
+  for(const o of kept){if(!x){o.cost=o.unary;continue;}for(let k=0;k<layers[x-1].length;k++){
+   const q=layers[x-1][k];const overlap=Math.min(q.high[1],o.high[0])-Math.max(q.low[1],o.low[0]);if(!Number.isFinite(q.cost)||(!allowGaps&&overlap<.5))continue;
+   if(diagonal&&Math.max(...[0,1].map(h=>Math.min(q.high[h],o.high[h])-Math.max(q.low[h],o.low[h])))<.5)continue;
+   const key=diagonal?[...q.high,...o.high,...q.low,...o.low].join(','):[q.high[1],o.high[0],q.low[1],o.low[0]].join(',');let edge=edgeCache.get(key);if(edge===undefined){if(diagonal){edge=0;for(let j=0;j<4;j++){const u=(x+(j+.5)/4)/Math.SQRT2,h=j<2?0:1;edge+=(edgeError(q.high[1],o.high[0],u,outer)+edgeError(q.low[1],o.low[0],u,inner)+edgeError(q.high[h],o.high[h],u,outer)+edgeError(q.low[h],o.low[h],u,inner))/4;}}else edge=edgeError(q.high[1],o.high[0],x,outer)+edgeError(q.low[1],o.low[0],x,inner);edgeCache.set(key,edge);}
+   const desired=diagonal?at((x+1)/Math.SQRT2)-at(x/Math.SQRT2):at(x+.5)-at(x-.5),dt=(o.high[0]+o.high[1]-q.high[0]-q.high[1])/2,db=(o.low[0]+o.low[1]-q.low[0]-q.low[1])/2;
+   const cost=q.cost+o.unary+edge+(allowGaps&&overlap<.5?.5:0)+.008*((dt-desired)**2+(db-desired)**2)+.004*(Math.abs(o.high[0]-q.high[1])+Math.abs(o.low[0]-q.low[1]));
+   if(cost<o.cost){o.cost=cost;o.prev=k;}
+  }}layers.push(kept);
+ }
+ const last=layers.at(-1);let k=last.reduce((best,o,i)=>o.cost<last[best].cost?i:best,0);if(!Number.isFinite(last[k]?.cost))throw Error('No connected roof found. Increase thickness.');
+ const cost=last[k].cost*(symmetric?2:1),columns=[];for(let x=count-1;x>=0;x--){const o=layers[x][k];columns.unshift(o);k=o.prev;}
+ // Mirror complete legal elements, including stair handedness. The centre column is flat on both surfaces.
+ if(symmetric)for(let x=count;x<n;x++){const source=columns[n-1-x],high=[...source.high].reverse(),low=[...source.low].reverse();columns.push({high,low,tiles:columnTiles(x,low,high,onlyBlocks)});}
+ const blocks=columns.flatMap(o=>o.tiles);let outside=0,inside=0;for(let x=0;x<n;x++)for(let j=0;j<16;j++)for(let z=0;z<(diagonal?4:1);z++){const xx=diagonal?(x+(j+.5)/16+(z+.5)/4)/Math.SQRT2:x+(j+.5)/16;outside+=distance(xx,columns[x].high[j<8?0:1],outer);inside+=distance(xx,columns[x].low[j<8?0:1],inner);}
+ const samples=n*16*(diagonal?4:1);
+ const gaps=columns.slice(1).filter((o,i)=>Math.min(columns[i].high[1],o.high[0])-Math.max(columns[i].low[1],o.low[0])<.5).length;
+ return {blocks,diagonal,gaps,columns:columns.map(({high,low})=>({high,low})),cost,outerRms:Math.sqrt(outside/samples),innerRms:Math.sqrt(inside/samples),rms:Math.sqrt((outside+inside)/(samples*2)),maxY:Math.max(c.h,...blocks.map(b=>b.y+1)),minY:Math.min(c.min,...blocks.map(b=>b.y))};
+}
+
+
+const curveDefaults={type:'circle',radius:20,extent:120,width:32,height:12,left:4,middle:16,bend:50,right:4,thickness:2,extraEnabled:false,extraPosition:75,extraHeight:12};
+const curveSpecs={circle:[['radius','Radius',2,128,.5],['extent','Arc',10,180,1]],ellipse:[['width','Width',4,128,.5],['height','Rise',1,64,.5]],custom:[['width','Width',4,128,.5],['middle','Bend height',-32,96,.5],['right','End height',-32,96,.5],['bend','Bend position %',10,90,1]]};
+const editClamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+function changeCurveType(p,type,{lockStart=false}={}){const c=curve(p),base=lockStart?c.handles[0][1]:0;return {...p,type,extraEnabled:type==='custom'&&!!p.extraEnabled,width:editClamp(c.span??c.w,4,128),height:editClamp(c.h-c.handles[0][1],1,64),bend:100*(c.handles[1][0]-(c.offset??0))/(c.span??c.w),left:c.handles[0][1]-base,middle:c.handles[1][1]-base,right:c.handles[2][1]-base};}
+function mountCurveControls(container,p,onChange,{prefix='',centerLocked=false}={}){
+ container.innerHTML=curveSpecs[p.type].map(([key,label,min,max,step])=>`<div class="control"><div class="control-head"><label for="${prefix}${key}-range">${label}</label><input id="${prefix}${key}-number" aria-label="${label}" type="number" min="${min}" max="${max}" step="${step}" value="${Number(p[key].toFixed(2))}"></div><input id="${prefix}${key}-range" aria-label="${label}" type="range" min="${min}" max="${max}" step="${step}" value="${p[key]}"></div>`).join('');
+ for(const [key,,min,max]of curveSpecs[p.type])for(const suffix of ['range','number']){const input=container.querySelector('#'+prefix+key+'-'+suffix);input.disabled=key==='bend'&&centerLocked;input.oninput=()=>{if(input.value===''||!Number.isFinite(+input.value))return;const value=editClamp(+input.value,min,max);container.querySelector('#'+prefix+key+'-'+(suffix==='range'?'number':'range')).value=value;onChange(key,value);};}
+}
+function editCurveHandle(original,index,dx,dy,{center=false,lockStart=false,originalCurve=curve(original)}={}){
+ if(lockStart&&index===0)return {...original};
+ let p;
+ if(index===3){const w=originalCurve.span??originalCurve.w;return {...original,type:'custom',extraEnabled:true,extraPosition:separatePoint(editClamp((original.extraPosition??75)+100*dx/w,5,95),original.bend??50,original.extraPosition??75),extraHeight:editClamp((original.extraHeight??12)+dy,-32,96)};}
+ if(index===1&&(center))dx=originalCurve.w/2-originalCurve.handles[1][0];
+ p={...original};const w=editClamp((originalCurve.span??originalCurve.w)+(index===0?-dx:index===2?dx:0),4,128),hs=originalCurve.handles.map(a=>a[1]);
+ if(index===1&&(original.type==='custom'||Math.abs(dx)>.2)){p.type='custom';p.width=w;p.left=hs[0];p.right=hs[2];p.middle=editClamp(hs[1]+dy,-32,96);p.bend=editClamp(100*(originalCurve.handles[1][0]-(originalCurve.offset??0)+dx)/w,10,90);}
+ else if(index!==1&&Math.abs(dy)>.2){p.type='custom';p.width=w;p.bend=100*(originalCurve.handles[1][0]-(originalCurve.offset??0))/(originalCurve.span??originalCurve.w);p.left=hs[0];p.middle=hs[1];p.right=hs[2];p[index===0?'left':'right']=editClamp(hs[index]+dy,-32,96);}
+ else if(p.type==='circle'){
+  if(index===1){const rise=editClamp(hs[1]+dy-4,Math.max(.2,w*w/1024),w/2);p.radius=(w*w/4+rise*rise)/(2*rise);p.extent=4*Math.atan(2*rise/w)*180/Math.PI;}
+  else p.radius=editClamp(w/(2*Math.sin(p.extent*Math.PI/360)),2,128);
+ }else if(p.type==='ellipse'){p.width=w;if(index===1)p.height=editClamp(hs[1]+dy-4,1,64);}
+ else{p.width=w;if(index===1)p.middle=editClamp(hs[1]+dy,-32,96);}
+ if(p.extraEnabled)p.bend=separatePoint(p.bend,p.extraPosition,original.bend);
+ if(lockStart&&p.type==='custom'){const base=p.left;p.left=0;p.middle-=base;p.right-=base;if(p.extraEnabled)p.extraHeight-=base;}
+ return p;
+}
+
+function separatePoint(value,other,previous){return Math.abs(value-other)<2.5?other+(previous<other?-2.5:2.5):value;}
+function toggleExtraPoint(p,{lockStart=false}={}){if(p.extraEnabled)return {...p,extraEnabled:false};const c=curve(p),base=lockStart?c.handles[0][1]:0,extraPosition=(p.bend??50)>65?25:75;return {...changeCurveType(p,'custom',{lockStart}),extraEnabled:true,extraPosition,extraHeight:c.fn((c.offset??0)+(c.span??c.w)*extraPosition/100)-base};}
+
+// Explicit, versioned data only. Imported geometry is always rebuilt from editable parameters.
+const blueprintFormat='minecraft-design-blueprint';
+const obj=(v,name)=>{if(!v||typeof v!=='object'||Array.isArray(v))throw Error(`Invalid ${name}`);return v;};
+const num=(v,min,max,name,integer=false)=>{if(typeof v!=='number'||!Number.isFinite(v)||v<min||v>max||(integer&&!Number.isInteger(v)))throw Error(`Invalid ${name}`);return v;};
+const bool=(v,name)=>{if(typeof v!=='boolean')throw Error(`Invalid ${name}`);return v;};
+const choice=(v,values,name)=>{if(!values.includes(v))throw Error(`Invalid ${name}`);return v;};
+const pair=(v,name)=>{if(!Array.isArray(v)||v.length!==2)throw Error(`Invalid ${name}`);return v.map(n=>num(n,-1e6,1e6,name));};
+function validateCamera(s){obj(s,'camera');return {yaw:num(s.yaw,-1e6,1e6,'camera angle'),pitch:num(s.pitch,-Math.PI/2,Math.PI/2,'camera pitch'),zoom:num(s.zoom,.3,12,'camera zoom'),offset:pair(s.offset,'camera pan')};}
+function validateCurveParams(s){obj(s,'curve');const p={type:choice(s.type,['circle','ellipse','custom'],'curve type')};for(const [key,min,max]of [['radius',2,256],['extent',1,180],['width',4,128],['height',1,64],['left',-256,256],['middle',-256,256],['right',-256,256],['bend',10,90],['thickness',.5,6]])p[key]=num(s[key],min,max,key);p.extraEnabled=s.extraEnabled===undefined?false:bool(s.extraEnabled,'extra point');p.extraPosition=s.extraPosition===undefined?75:num(s.extraPosition,5,95,'extra point position');p.extraHeight=s.extraHeight===undefined?12:num(s.extraHeight,-256,256,'extra point height');if('onlyBlocks'in s)p.onlyBlocks=bool(s.onlyBlocks,'full blocks');return p;}
+// Corner gable defaults (kept equal to gableDefaults in frame-curve.js; a test checks this). Older files have no gables.
+const houseGableDefaults={enabled:true,height:7,reach:6,flare:60,thickness:1.5,depth:2,overhang:1};
+function validateGables(g){if(g===undefined)return {...houseGableDefaults};obj(g,'corner gables');return {enabled:bool(g.enabled,'corner gables'),height:num(g.height,1,24,'gable height',true),reach:num(g.reach,2,12,'gable reach',true),flare:num(g.flare,0,100,'gable flare',true),thickness:num(g.thickness,.5,4,'gable thickness'),depth:num(g.depth,1,4,'gable depth',true),overhang:num(g.overhang,0,3,'gable overhang',true)};}
+const validatePillars=(p,name)=>({outer:num(p?.outer,1,64,name+' outer height',true),inner:num(p?.inner,1,64,name+' inner height',true),center:num(p?.center,1,64,name+' innermost height',true),lift:p?.lift===undefined?3:num(p.lift,0,32,name+' innermost lift',true),beam:p?.beam===undefined?5:num(p.beam,1,64,name+' beam level',true)});
+// Angle Roof beam defaults (kept equal to angleBeamDefaults in angle-roof.js; a test checks this).
+const houseAngleBeamDefaults={toOuter:{start:4,angle:26.6,thickness:1,extendStart:0,extendEnd:0},toInner:{start:6,angle:26.6,thickness:1,extendStart:0,extendEnd:0}};
+// Ranges kept equal to angleBeamRanges in angle-roof.js (a test checks this).
+const houseAngleBeamRanges={start:[1,64,true],angle:[0,80,false],thickness:[.5,3,false],extendStart:[0,12,true],extendEnd:[0,12,true]};
+// Beam runs, kept equal to beamRun() in angle-roof.js: older files stored an end block, converted here to the same angle.
+const beamRuns={toOuter:6,toInner:4};
+function validateBeams(b,pillars){const out={};for(const key of Object.keys(houseAngleBeamDefaults)){const v=b?.[key];if(v===undefined){out[key]={...houseAngleBeamDefaults[key]};continue;}obj(v,'beams');
+ if(v.angle===undefined&&v.end!==undefined){const start=num(v.start,1,64,'beam start',true),end=num(v.end,1,64,'beam end',true),offset=key==='toInner'?pillars.lift:0;out[key]={...houseAngleBeamDefaults[key],start,angle:+Math.max(0,Math.min(80,Math.atan2(end-start-offset,beamRuns[key])*180/Math.PI)).toFixed(1)};continue;}
+ out[key]=Object.fromEntries(Object.entries(houseAngleBeamRanges).map(([k,[lo,hi,int]])=>[k,num(v[k],lo,hi,'beam '+k,int)]));}return out;}
+// Files from before the Angle Roof start it as a copy of their Curved Roof columns.
+function validateAngle(a,pillars){if(a===undefined)return {pillars:{...pillars},beams:validateBeams(undefined,pillars)};obj(a,'Angle Roof');const own=validatePillars(a.pillars,'Angle Roof');return {pillars:own,beams:validateBeams(a.beams,own)};}
+function validateHouseState(s){obj(s,'House Roof');
+ // curveSide counts blocks either side of the centre line; older files stored a total width instead.
+ const curveSide=s.curveSide!==undefined?num(s.curveSide,0,15,'curve width',true):Math.min(15,Math.round((num(s.curveWidth,1,32,'curve width',true)-1)/2));
+ const pillars=validatePillars(s.pillars,'Curved Roof');
+ return {params:validateCurveParams(s.params),pillars,curveSide,gables:validateGables(s.gables),enabled:bool(s.enabled,'curve visibility'),locked:bool(s.locked,'bend lock'),grid:bool(s.grid,'grid'),reference:bool(s.reference,'reference'),group:choice(s.group,[null,'deck','gables','path','steps','beam','outer','inner','center','curves','outer-beams','inner-beams'],'selection'),editor:choice(s.editor,['structure','curves'],'editor'),camera:validateCamera(s.camera),variant:s.variant===undefined?'curved':choice(s.variant,['curved','angle'],'roof variation'),angle:validateAngle(s.angle,pillars)};}
+// Bridge 1: lower and upper curve settings, the upper curve's placement, and the two beam pairs.
+// Beam limits are kept equal to bridgeBeamLimits in bridge1.js (a test checks this).
+const bridgeBeamRanges={height:[1,96],thickness:[1,8],tilt:[0,45],spacing:[1,24],position:[-24,48]};
+function validateBridgeBeam(b,name){obj(b,name);return Object.fromEntries(Object.entries(bridgeBeamRanges).map(([key,[lo,hi]])=>[key,num(b[key],lo,hi,`${name} ${key}`,true)]));}
+function validateBridge1State(s){obj(s,'Bridge 1');const u=obj(s.upper,'upper curve'),b=obj(s.beams,'beams');
+ return {lower:validateCurveParams(s.lower),upper:{params:validateCurveParams(u.params),level:num(u.level,-256,256,'upper curve height',true),mirrored:bool(u.mirrored,'mirrored upper curve')},beams:{linked:bool(b.linked,'linked beams'),left:validateBridgeBeam(b.left,'left beams'),right:validateBridgeBeam(b.right,'right beams')},
+  locks:{lower:bool(s.locks?.lower,'lower centre lock'),upper:bool(s.locks?.upper,'upper centre lock')},onlyBlocks:bool(s.onlyBlocks,'full blocks'),display:{reference:bool(s.display?.reference,'reference'),grid:bool(s.display?.grid,'grid'),handles:bool(s.display?.handles,'handles')},
+  mono:bool(s.mono,'single colour'),mode3d:bool(s.mode3d,'3D mode'),depth:num(s.depth,1,32,'depth',true),part:choice(s.part,['lower','beams','upper'],'Bridge 1 panel'),zoom:num(s.zoom,.5,12,'zoom'),pan:pair(s.pan,'pan'),camera:validateCamera(s.camera)};}
+function validateBlueprint(input){
+ const b=obj(input,'blueprint');if(b.format!==blueprintFormat||b.version!==1)throw Error('Unsupported blueprint format or version.');const s=obj(b.state,'state'),c=obj(s.curves,'Curves');
+ const curves={params:validateCurveParams(c.params),layout:choice(c.layout,['straight','diagonal','hip'],'layout'),depth:num(c.depth,1,32,'depth',true),mode3d:bool(c.mode3d,'3D mode'),mono:bool(c.mono,'single colour'),locked:bool(c.locked,'centre lock'),zoom:num(c.zoom,.5,12,'zoom'),pan:pair(c.pan,'pan'),camera:validateCamera(c.camera),display:{}};
+ for(const key of ['reference','grid','handles','baseline'])curves.display[key]=bool(c.display?.[key],key);
+ return {format:blueprintFormat,version:1,createdAt:typeof b.createdAt==='string'?b.createdAt:'',state:{activeTab:choice(s.activeTab,['curve','frame','bridge','bridge1'],'workspace'),curves,house:validateHouseState(s.house),bridge:{camera:validateCamera(s.bridge?.camera)},bridge1:s.bridge1===undefined||s.bridge1===null?null:validateBridge1State(s.bridge1)}};
+}
+function encodeBlueprint(state){return JSON.stringify(validateBlueprint({format:blueprintFormat,version:1,createdAt:new Date().toISOString(),state}),null,2);}
+function decodeBlueprint(text){if(typeof text!=='string'||text.length>1048576)throw Error('Blueprint must be smaller than 1 MB.');let parsed;try{parsed=JSON.parse(text);}catch{throw Error('This file is not valid blueprint JSON.');}return validateBlueprint(parsed);}
+const versionsKey='minecraft-design-versions-v1';
+function readVersions(storage){const raw=storage.getItem(versionsKey);if(!raw)return [];const list=JSON.parse(raw);if(!Array.isArray(list)||list.length>50)throw Error('Invalid saved versions. Export a blueprint to keep a portable copy.');return list.map(v=>{if(typeof v.id!=='string'||typeof v.name!=='string'||typeof v.savedAt!=='string')throw Error('Invalid saved version');return {id:v.id,name:v.name.slice(0,100),savedAt:v.savedAt,blueprint:validateBlueprint(v.blueprint)};});}
+function appendVersion(storage,entry){const list=readVersions(storage);if(list.length>=50)throw Error('50 versions saved. Export or delete an older version first.');const next={...entry,blueprint:validateBlueprint(entry.blueprint)};storage.setItem(versionsKey,JSON.stringify([...list,next]));return next;}
+
+globalThis.CURVE_WORKER_SOURCE="// Occupied half-cell masks, bottom row first. No sideways slabs or wedges.\nconst shapes={block:[1,1,1,1],slab:[1,1,0,0],right:[1,1,0,1],left:[1,1,1,0]};\nfunction polygon(e){const {x,y,type,flip}=e;let pts=type==='block'?[[0,0],[1,0],[1,1],[0,1]]:type==='slab'?[[0,0],[1,0],[1,.5],[0,.5]]:type==='right'?[[0,0],[1,0],[1,1],[.5,1],[.5,.5],[0,.5]]:[[0,0],[1,0],[1,.5],[.5,.5],[.5,1],[0,1]];return pts.map(([a,b])=>[x+a,y+(flip?1-b:b)]);}\nfunction elements(columns,ceiling,flip){const out=[];columns.forEach((c,x)=>{for(let y=0;y<c.base;y++)out.push({x,y,type:'block'});if(c.type!=='empty')out.push({x,y:c.base,type:c.type});});return out.map(e=>flip?{...e,y:ceiling-1-e.y,flip:true}:e);}\n\nfunction curve(p){\n let w=p.width,h=p.height,fn,bend=.5;const base=4;\n if(p.type==='circle'){const a=p.extent*Math.PI/360,r=p.radius;w=2*r*Math.sin(a);h=r*(1-Math.cos(a));fn=x=>base+Math.sqrt(Math.max(0,r*r-(x-w/2)**2))-r*Math.cos(a);}\n else if(p.type==='ellipse')fn=x=>base+h*Math.sqrt(Math.max(0,1-(2*x/w-1)**2));\n else {bend=Math.max(.1,Math.min(.9,(p.bend??50)/100));const left=p.left??4,right=p.right??4,middle=p.middle??16,control=2*middle-(left+right)/2;fn=x=>{const u=x/w;\n // Monotone parameter mapping moves the bend without loops or a tangent seam.\n const t=(1-bend)*u/(bend+(1-2*bend)*u);return (1-t)**2*left+2*(1-t)*t*control+t*t*right;};}\n // Centre symmetric references on a valid grid reflection axis without changing their shape.\n const symmetric=!p.extraEnabled&&(p.type!=='custom'||(Math.abs((p.left??4)-(p.right??4))<1e-9&&Math.abs(bend-.5)<1e-9));\n const span=w,gridWidth=symmetric?(p.layout==='diagonal'?(Math.max(1,Math.ceil(w*Math.SQRT2-1e-9)-1)+1)/Math.SQRT2:Math.ceil(w-1e-9)):w,offset=(gridWidth-span)/2,raw=fn;\n fn=x=>raw(Math.max(0,Math.min(span,x-offset)));\n let extraX=null;\n if(p.type==='custom'&&p.extraEnabled){\n  extraX=Math.max(.05,Math.min(.95,(p.extraPosition??75)/100));if(Math.abs(extraX-bend)<.025)extraX=bend+(extraX<bend?-.025:.025);\n  const nodes=[[0,p.left??4],[w*bend,p.middle??16],[w*extraX,p.extraHeight??12],[w,p.right??4]].sort((a,b)=>a[0]-b[0]);\n  const slopes=nodes.slice(1).map((n,i)=>(n[1]-nodes[i][1])/(n[0]-nodes[i][0]));\n  const tangents=nodes.map((n,i)=>{if(i===0)return slopes[0];if(i===nodes.length-1)return slopes.at(-1);if(slopes[i-1]*slopes[i]<=0)return 0;const a=nodes[i][0]-nodes[i-1][0],b=nodes[i+1][0]-nodes[i][0],u=2*b+a,v=b+2*a;return (u+v)/(u/slopes[i-1]+v/slopes[i]);});\n  fn=x=>{const u=Math.max(0,Math.min(w,x-offset));let i=0;while(i<nodes.length-2&&u>nodes[i+1][0])i++;const [a,ya]=nodes[i],[b,yb]=nodes[i+1],d=b-a,t=(u-a)/d;return (2*t**3-3*t*t+1)*ya+(t**3-2*t*t+t)*d*tangents[i]+(-2*t**3+3*t*t)*yb+(t**3-t*t)*d*tangents[i+1];};\n }\n const thickness=p.thickness??2,points=Array.from({length:513},(_,i)=>[offset+span*i/512,fn(offset+span*i/512)]),inner=points.map(([x,y])=>[x,y-thickness]);\n return {w:gridWidth,span,offset,symmetric,h:Math.max(...points.map(a=>a[1])),min:Math.min(...inner.map(a=>a[1])),fn,points,inner,thickness,handles:[[offset,fn(offset)],[offset+span*bend,fn(offset+span*bend)],[offset+span,fn(offset+span)],...(extraX===null?[]:[[offset+span*extraX,fn(offset+span*extraX)]])]};\n}\n\n// Nearest-polyline distance with a bounding-volume tree.\nfunction tree(pts,lo=0,hi=pts.length-1){const slice=pts.slice(lo,hi+1),node={minX:Math.min(...slice.map(p=>p[0])),maxX:Math.max(...slice.map(p=>p[0])),minY:Math.min(...slice.map(p=>p[1])),maxY:Math.max(...slice.map(p=>p[1]))};if(hi-lo<=4)node.points=slice;else{const mid=(lo+hi)>>1;node.left=tree(pts,lo,mid);node.right=tree(pts,mid,hi);}return node;}\nfunction distance(x,y,root){let best=Infinity;const bound=n=>Math.max(n.minX-x,0,x-n.maxX)**2+Math.max(n.minY-y,0,y-n.maxY)**2;function visit(n){if(bound(n)>=best)return;if(n.points){for(let i=1;i<n.points.length;i++){const [a,b]=n.points[i-1],[c,d]=n.points[i],dx=c-a,dy=d-b,t=Math.max(0,Math.min(1,((x-a)*dx+(y-b)*dy)/(dx*dx+dy*dy)));best=Math.min(best,(x-a-t*dx)**2+(y-b-t*dy)**2);}}else if(bound(n.left)<bound(n.right)){visit(n.left);visit(n.right);}else{visit(n.right);visit(n.left);}}visit(root);return best;}\n// Bit masks: lower left, lower right, upper left, upper right.\nconst legal=new Map([[15,{type:'block'}],[3,{type:'slab'}],[12,{type:'slab',flip:true}],[11,{type:'right'}],[7,{type:'left'}],[14,{type:'right',flip:true}],[13,{type:'left',flip:true}]]);\nfunction columnTiles(x,low,high,onlyBlocks){\n if(Math.min(...high)-Math.max(...low)<.5)return null;\n const out=[];\n for(let y=Math.floor(Math.min(...low));y<Math.ceil(Math.max(...high));y++){\n  let mask=0;for(let j=0;j<4;j++){const yy=y+(j<2?.25:.75),side=j%2;if(yy>low[side]&&yy<high[side])mask|=1<<j;}\n  if(!mask)continue;const shape=legal.get(mask);if(!shape||(onlyBlocks&&mask!==15))return null;out.push({x,y,...shape});\n }return out;\n}\nfunction profiles(min,max,upper,onlyBlocks){const out=[];for(let y=Math.floor(min)-1;y<=Math.ceil(max)+1;y++){out.push([y,y]);if(!onlyBlocks)out.push([y+.5,y+.5],upper?[y+.5,y+1]:[y+.5,y],upper?[y+1,y+.5]:[y,y+.5]);}return out;}\nfunction measurePlacedRoof(blocks,c,layout){\n const top=tree(c.points),bottom=tree(c.inner),surfaces=new Map();\n for(const e of blocks){const mask=e.type==='block'?[1,1,1,1]:e.type==='slab'?[1,1,0,0]:e.type==='right'?[1,1,0,1]:[1,1,1,0];for(let x=0;x<2;x++)for(let z=0;z<2;z++)for(let y=0;y<2;y++){const side=e.axis==='z'?z:x;if(!mask[(e.flip?1-y:y)*2+side])continue;const xx=e.x+(x+.5)/2,zz=e.z+(z+.5)/2,key=xx+','+zz,low=e.y+y/2,high=low+.5,s=surfaces.get(key);if(s){s.low=Math.min(s.low,low);s.high=Math.max(s.high,high);}else surfaces.set(key,{x:xx,z:zz,low,high});}}\n let outer=0,inner=0;for(const s of surfaces.values()){const u=layout==='diagonal'?(s.x+s.z)/Math.SQRT2:layout==='hip'?Math.min(s.x,s.z):s.x;outer+=distance(u,s.high,top);inner+=distance(u,s.low,bottom);}return {outerRms:Math.sqrt(outer/surfaces.size),innerRms:Math.sqrt(inner/surfaces.size)};\n}\nfunction solve(c,{onlyBlocks=false,diagonal=false,startThickness=null,maxThickness=null,startLow=null,allowGaps=false}={}){\n const outer=tree(c.points),inner=tree(c.inner),layers=[],n=diagonal?Math.max(1,Math.ceil(c.w*Math.SQRT2-1e-9)-1):Math.ceil(c.w-1e-9),thickness=c.thickness;\n const at=t=>c.fn(Math.max(0,Math.min(c.w,t)));\n const centre=diagonal?(n+1)/(2*Math.SQRT2):n/2;\n const symmetric=startThickness===null&&startLow===null&&Math.abs(centre-c.w/2)<1e-7&&c.points.every(([x,y],i)=>Math.abs(y-c.points[c.points.length-1-i][1])<1e-7);\n const count=symmetric?Math.ceil(n/2):n;\n for(let x=0;x<count;x++){\n  const ys=[0,.25,.5,.75,1].map(t=>at(diagonal?(x+2*t)/Math.SQRT2:x+t)),min=Math.min(...ys),max=Math.max(...ys),top=profiles(min,max,true,onlyBlocks),bottom=profiles(min-thickness,max-thickness,false,onlyBlocks),opts=[];\n  if(x===0&&startThickness!==null){top.push([startThickness,startThickness]);bottom.push([0,0]);}\n  if(x===0&&startLow!==null){top.push([startLow+thickness,startLow+thickness]);bottom.push([startLow,startLow]);}\n  const riserCache=new Map();\n  function edgeError(a,b,xx,ref){const len=Math.abs(b-a);if(!len)return 0;const lo=Math.min(a,b),key=[lo,lo+len,xx,ref===outer?0:1].join(',');if(riserCache.has(key))return riserCache.get(key);const count=Math.max(1,Math.ceil(len*4));let cost=0;for(let j=0;j<count;j++)cost+=distance(xx,lo+len*(j+.5)/count,ref)*len/count;riserCache.set(key,cost);return cost;}\n  function surface(profile,ref){let e=0;for(let j=0;j<8;j++){if(diagonal){for(let z=0;z<4;z++)e+=distance((x+(j+.5)/8+(z+.5)/4)/Math.SQRT2,profile[j<4?0:1],ref)/32;}else e+=distance(x+(j+.5)/8,profile[j<4?0:1],ref)/8;}if(diagonal){for(let z=0;z<4;z++)e+=edgeError(profile[0],profile[1],(x+.5+(z+.5)/4)/Math.SQRT2,ref)/4;return e;}return e+edgeError(profile[0],profile[1],x+.5,ref);}\n  const tc=new Map(top.map(a=>[a,surface(a,outer)])),bc=new Map(bottom.map(a=>[a,surface(a,inner)]));\n  for(const high of top)for(const low of bottom){if(maxThickness!==null&&Math.max(...high)-Math.min(...low)>maxThickness+1e-9)continue;if(x===0&&startLow!==null&&low[0]!==startLow)continue;if(x===0&&startThickness!==null&&(low.some(y=>y!==0)||high.some(y=>y!==startThickness)))continue;if(symmetric&&n%2&&x===count-1&&(high[0]!==high[1]||low[0]!==low[1]))continue;const tiles=columnTiles(x,low,high,onlyBlocks);if(!tiles)continue;const thick=(high[0]+high[1]-low[0]-low[1])/2;const unary=tc.get(high)+bc.get(low)+.008*(thick-thickness)**2+.0002*tiles.filter(t=>t.type!=='block').length;opts.push({high,low,tiles,unary:symmetric&&n%2&&x===count-1?unary/2:unary,cost:Infinity,prev:-1});}\n  // DP is exact within these retained states, not over all possible builds.\n  opts.sort((a,b)=>a.unary-b.unary);const kept=opts.slice(0,72);\n  const bridge=opts.find(o=>Math.max(...o.low)<=Math.floor(min-thickness)&&Math.min(...o.high)>=Math.ceil(max));\n  if(bridge&&!kept.includes(bridge))kept.push(bridge);\n  const edgeCache=new Map();\n  for(const o of kept){if(!x){o.cost=o.unary;continue;}for(let k=0;k<layers[x-1].length;k++){\n   const q=layers[x-1][k];const overlap=Math.min(q.high[1],o.high[0])-Math.max(q.low[1],o.low[0]);if(!Number.isFinite(q.cost)||(!allowGaps&&overlap<.5))continue;\n   if(diagonal&&Math.max(...[0,1].map(h=>Math.min(q.high[h],o.high[h])-Math.max(q.low[h],o.low[h])))<.5)continue;\n   const key=diagonal?[...q.high,...o.high,...q.low,...o.low].join(','):[q.high[1],o.high[0],q.low[1],o.low[0]].join(',');let edge=edgeCache.get(key);if(edge===undefined){if(diagonal){edge=0;for(let j=0;j<4;j++){const u=(x+(j+.5)/4)/Math.SQRT2,h=j<2?0:1;edge+=(edgeError(q.high[1],o.high[0],u,outer)+edgeError(q.low[1],o.low[0],u,inner)+edgeError(q.high[h],o.high[h],u,outer)+edgeError(q.low[h],o.low[h],u,inner))/4;}}else edge=edgeError(q.high[1],o.high[0],x,outer)+edgeError(q.low[1],o.low[0],x,inner);edgeCache.set(key,edge);}\n   const desired=diagonal?at((x+1)/Math.SQRT2)-at(x/Math.SQRT2):at(x+.5)-at(x-.5),dt=(o.high[0]+o.high[1]-q.high[0]-q.high[1])/2,db=(o.low[0]+o.low[1]-q.low[0]-q.low[1])/2;\n   const cost=q.cost+o.unary+edge+(allowGaps&&overlap<.5?.5:0)+.008*((dt-desired)**2+(db-desired)**2)+.004*(Math.abs(o.high[0]-q.high[1])+Math.abs(o.low[0]-q.low[1]));\n   if(cost<o.cost){o.cost=cost;o.prev=k;}\n  }}layers.push(kept);\n }\n const last=layers.at(-1);let k=last.reduce((best,o,i)=>o.cost<last[best].cost?i:best,0);if(!Number.isFinite(last[k]?.cost))throw Error('No connected roof found. Increase thickness.');\n const cost=last[k].cost*(symmetric?2:1),columns=[];for(let x=count-1;x>=0;x--){const o=layers[x][k];columns.unshift(o);k=o.prev;}\n // Mirror complete legal elements, including stair handedness. The centre column is flat on both surfaces.\n if(symmetric)for(let x=count;x<n;x++){const source=columns[n-1-x],high=[...source.high].reverse(),low=[...source.low].reverse();columns.push({high,low,tiles:columnTiles(x,low,high,onlyBlocks)});}\n const blocks=columns.flatMap(o=>o.tiles);let outside=0,inside=0;for(let x=0;x<n;x++)for(let j=0;j<16;j++)for(let z=0;z<(diagonal?4:1);z++){const xx=diagonal?(x+(j+.5)/16+(z+.5)/4)/Math.SQRT2:x+(j+.5)/16;outside+=distance(xx,columns[x].high[j<8?0:1],outer);inside+=distance(xx,columns[x].low[j<8?0:1],inner);}\n const samples=n*16*(diagonal?4:1);\n const gaps=columns.slice(1).filter((o,i)=>Math.min(columns[i].high[1],o.high[0])-Math.max(columns[i].low[1],o.low[0])<.5).length;\n return {blocks,diagonal,gaps,columns:columns.map(({high,low})=>({high,low})),cost,outerRms:Math.sqrt(outside/samples),innerRms:Math.sqrt(inside/samples),rms:Math.sqrt((outside+inside)/(samples*2)),maxY:Math.max(c.h,...blocks.map(b=>b.y+1)),minY:Math.min(c.min,...blocks.map(b=>b.y))};\n}\n\n\nself.onmessage=({data:p})=>{try{const c=curve(p),roof=solve(c,{onlyBlocks:p.onlyBlocks,diagonal:p.layout==='diagonal'});self.postMessage({c:{w:c.w,h:c.h,min:c.min,points:c.points,inner:c.inner,handles:c.handles},roof});}catch(e){self.postMessage({error:e.message});}};\n";
+// Only integer world positions and cardinal stair directions are used.
+function placeRoof(roof,depth,layout='straight',run=null){
+ const blocks=[];
+ if(layout==='diagonal'){
+  const bands=Math.max(2,Math.ceil(depth*Math.SQRT2));
+  for(const e of roof.blocks)for(let t=e.x%2;t<bands;t+=2)blocks.push({...e,x:(e.x-t)/2,z:(e.x+t)/2,axis:'x',band:e.x});
+ }else if(layout==='hip'){
+  // Both wings use the complete edited profile. A half-span here silently
+  // discarded the right endpoint and made the 3D design differ from the editor.
+  const size=Math.max(1,Math.min(roof.columns.length,Math.ceil(run??roof.columns.length))),columns=new Map();for(const e of roof.blocks){if(!columns.has(e.x))columns.set(e.x,[]);columns.get(e.x).push(e);}
+  for(let x=0;x<size;x++)for(let z=0;z<size;z++)for(const e of columns.get(Math.min(x,z))??[]){const seam=x===z,stair=e.type==='left'||e.type==='right';blocks.push({...e,x,z,axis:x<=z?'x':'z',...(seam&&stair?{type:'block',flip:false,seam:true}:{})});}
+ }else for(let z=0;z<depth;z++)for(const e of roof.blocks)blocks.push({...e,z,axis:'x'});
+ let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,minZ=Infinity,maxZ=-Infinity;for(const e of blocks){minX=Math.min(minX,e.x);maxX=Math.max(maxX,e.x+1);minY=Math.min(minY,e.y);maxY=Math.max(maxY,e.y+1);minZ=Math.min(minZ,e.z);maxZ=Math.max(maxZ,e.z+1);}
+ return {blocks,placed:true,layout,minX,maxX,minY,maxY,minZ,maxZ};
+}
+// Half-block voxels of one element. An inner-corner stair keeps a full bottom and three raised quarters, lowering only (lowX, lowZ).
+// An outer-corner stair keeps a full bottom and raises only the quarter (hiX, hiZ). Flipped pieces are upside down.
+function forEachVoxel(e,fn){
+ if(e.type==='outer'){for(let a=0;a<2;a++)for(let y=0;y<2;y++)for(let b=0;b<2;b++){const localY=e.flip?1-y:y;if(localY===0||(a===e.hiX&&b===e.hiZ))fn(e.x*2+a,e.y*2+y,e.z*2+b);}return;}
+ if(e.type==='corner'){for(let a=0;a<2;a++)for(let y=0;y<2;y++)for(let b=0;b<2;b++){const localY=e.flip?1-y:y;if(localY===0||a!==e.lowX||b!==e.lowZ)fn(e.x*2+a,e.y*2+y,e.z*2+b);}return;}
+ const mask=e.type==='block'?[1,1,1,1]:e.type==='slab'?[1,1,0,0]:e.type==='right'?[1,1,0,1]:[1,1,1,0];for(let a=0;a<2;a++)for(let y=0;y<2;y++)for(let b=0;b<2;b++){const side=e.axis==='z'?b:a,localY=e.flip?1-y:y;if(mask[localY*2+side])fn(e.x*2+a,e.y*2+y,e.z*2+b);}
+}
+function occupiedVoxels(blocks){
+ const voxels=new Map();blocks.forEach((e,id)=>forEachVoxel(e,(x,y,z)=>voxels.set(x+','+y+','+z,id)));return voxels;
+}
+function placementDirection(e){if(e.type==='outer')return (e.hiX?'+':'-')+'X'+(e.hiZ?'+':'-')+'Z';if(e.type==='corner')return (e.lowX?'-':'+')+'X'+(e.lowZ?'-':'+')+'Z';return e.type==='left'||e.type==='right'?(e.type==='right'?'+':'-')+(e.axis==='z'?'Z':'X'):'';}
+
+function roofMesh(blocks,depth=1,placed=false){
+ const placements=placed?blocks:placeRoof({blocks},depth).blocks;
+ // Independent design layers must not fill or erase one another at intersections.
+ if(placements.some(b=>b.layer)){const layers=new Map();placements.forEach((b,id)=>{const k=b.layer??'default';if(!layers.has(k))layers.set(k,[]);layers.get(k).push({b,id});});return [...layers.values()].flatMap(items=>roofMesh(items.map(({b})=>({...b,layer:undefined})),1,true).map(f=>({...f,id:items[f.id].id})));}
+ const voxels=occupiedVoxels(placements),groups=new Map(),faces=[];
+ for(const [key,id]of voxels){const p=key.split(',').map(Number);for(let axis=0;axis<3;axis++)for(const sign of [-1,1]){const next=[...p];next[axis]+=sign;if(voxels.has(next.join(',')))continue;const plane=p[axis]+(sign>0?1:0),axes=[0,1,2].filter(a=>a!==axis),u=p[axes[0]],v=p[axes[1]],k=[id,axis,sign,plane].join(',');if(!groups.has(k))groups.set(k,{id,axis,sign,plane,axes,cells:new Set()});groups.get(k).cells.add(u+','+v);}}
+ for(const g of groups.values())while(g.cells.size){const [u,v]=g.cells.values().next().value.split(',').map(Number);let w=1,h=1;while(g.cells.has((u+w)+','+v))w++;while(Array.from({length:w},(_,i)=>g.cells.has((u+i)+','+(v+h))).every(Boolean))h++;for(let i=0;i<w;i++)for(let j=0;j<h;j++)g.cells.delete((u+i)+','+(v+j));
+ const pts=[[u,v],[u+w,v],[u+w,v+h],[u,v+h]].map(([a,b])=>{const p=[];p[g.axis]=g.plane/2;p[g.axes[0]]=a/2;p[g.axes[1]]=b/2;return p;}),normal=[0,0,0];normal[g.axis]=g.sign;faces.push({pts,normal,id:g.id,z:placements[g.id].z});}
+ return faces;
+}
+// Shared camera presets for every 3D view (roofs and terrain).
+function cameraPreset(name){return {yaw:name==='front'||name==='top'?0:-.62,pitch:name==='top'?Math.PI/2:name==='inside'?-.6:name==='front'?0:.38,zoom:1,offset:[0,0]};}
+function createRoof3D(canvas,onSelect){
+ const ctx=canvas.getContext('2d');let yaw=-.62,pitch=.38,zoom=1,offset=[0,0],drag=null,roof,depth=12,mesh=[],options={},projected=[],frame;
+ const colors={block:'#b0b0b0',slab:'#bababa',left:'#818181',right:'#818181'};
+ function draw(){if(!roof||canvas.hidden||!ctx)return;const rect=canvas.getBoundingClientRect(),w=rect.width,h=rect.height;if(!w||!h)return;const dpr=Math.min(devicePixelRatio||1,2);canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);
+  const minX=roof.minX??0,maxX=roof.maxX??Math.max(...roof.blocks.map(b=>b.x+1)),minZ=roof.minZ??0,maxZ=roof.maxZ??depth,width=maxX-minX,cy=(Math.min(roof.minY,roof.groundY??roof.minY)+roof.maxY)/2,sy=Math.sin(yaw),co=Math.cos(yaw),sp=Math.sin(pitch),cp=Math.cos(pitch),radius=Math.hypot(width,roof.maxY-Math.min(roof.minY,roof.groundY??roof.minY),maxZ-minZ)/2,scale=Math.min(w,h)/(radius*2.35)*zoom;
+  const camera=[sy*cp,sp,-co*cp];
+  function project([x,y,z]){x-=(minX+maxX)/2;y-=cy;z-=(minZ+maxZ)/2;const xx=co*x+sy*z,zz=sy*x-co*z;return [w/2+offset[0]+xx*scale,h/2+offset[1]-(cp*y-sp*zz)*scale,cp*zz+sp*y];}
+  function path(pts){ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();}
+  if(options.grid){ctx.strokeStyle='#3e3e3e';ctx.lineWidth=.7;const floor=roof.groundY??(roof.minY-1),pad=3,step=width>100?4:1;for(let x=minX-pad;x<=maxX+pad;x+=step){const a=project([x,floor,minZ-pad]),b=project([x,floor,maxZ+pad]);ctx.beginPath();ctx.moveTo(...a.slice(0,2));ctx.lineTo(...b.slice(0,2));ctx.stroke();}for(let z=minZ-pad;z<=maxZ+pad;z+=step){const a=project([minX-pad,floor,z]),b=project([maxX+pad,floor,z]);ctx.beginPath();ctx.moveTo(...a.slice(0,2));ctx.lineTo(...b.slice(0,2));ctx.stroke();}}
+  projected=mesh.filter(f=>f.normal.reduce((s,n,i)=>s+n*camera[i],0)>.0001).map(f=>{const pts=f.pts.map(project);return {...f,pts,d:pts.reduce((s,p)=>s+p[2],0)/4};}).sort((a,b)=>a.d-b.d);
+  ctx.globalAlpha=options.pending?.45:1;
+  for(const face of projected){const e=roof.blocks[face.id],hex=options.groupColors?(options.selectedGroup?(e.group===options.selectedGroup?'#e1e1e1':'#484848'):(options.groupColors[e.group]??colors[e.type])):options.selectedGroup&&e.group===options.selectedGroup?'#cbcbcb':options.mono?'#a9a9a9':e.group==='outer'?'#a3a3a3':colors[e.type],light=.72+.24*Math.max(0,face.normal[1])+.12*Math.max(0,-face.normal[2])+.07*Math.max(0,-face.normal[0]);const rgb=[1,3,5].map(i=>Math.round(parseInt(hex.slice(i,i+2),16)*light));path(face.pts);ctx.fillStyle=`rgb(${rgb})`;ctx.fill();ctx.strokeStyle='rgba(70,70,70,.27)';ctx.lineWidth=.55;ctx.stroke();}
+  ctx.globalAlpha=1;
+  canvas.dataset.selectedGroup=options.selectedGroup??'';canvas.dataset.faces=String(projected.length);canvas.dataset.depth=String(depth);canvas.dataset.yaw=String(yaw);canvas.dataset.pitch=String(pitch);
+ }
+ function schedule(){cancelAnimationFrame(frame);frame=requestAnimationFrame(draw);}
+ canvas.oncontextmenu=e=>e.preventDefault();canvas.onpointerdown=e=>{drag={x:e.clientX,y:e.clientY,yaw,pitch,offset:[...offset],pan:e.shiftKey||e.button===2,moved:false};canvas.setPointerCapture(e.pointerId);e.preventDefault();};canvas.onpointermove=e=>{if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;drag.moved||=Math.hypot(dx,dy)>3;if(drag.pan)offset=[drag.offset[0]+dx,drag.offset[1]+dy];else{yaw=drag.yaw+dx*.008;pitch=Math.max(-1.5,Math.min(1.5,drag.pitch+dy*.008));}schedule();};
+ canvas.onpointerup=e=>{if(drag&&!drag.moved){const rect=canvas.getBoundingClientRect(),x=e.clientX-rect.left,y=e.clientY-rect.top;for(let i=projected.length-1;i>=0;i--){const f=projected[i];let inside=false;for(let j=0,k=f.pts.length-1;j<f.pts.length;k=j++){const a=f.pts[j],b=f.pts[k];if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])inside=!inside;}if(inside){onSelect(roof.blocks[f.id],f.z);break;}}}drag=null;if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);};canvas.onpointercancel=()=>drag=null;
+ canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.3,Math.min(12,zoom*Math.exp(-e.deltaY*.001)));schedule();},{passive:false});canvas.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();yaw+=e.key==='ArrowLeft'?-.12:e.key==='ArrowRight'?.12:0;pitch=Math.max(-1.5,Math.min(1.5,pitch+(e.key==='ArrowUp'?.12:e.key==='ArrowDown'?-.12:0)));schedule();};
+ return {getState(){return {yaw,pitch,zoom,offset:[...offset]};},setState(s){yaw=s.yaw;pitch=s.pitch;zoom=s.zoom;offset=[...s.offset];schedule();},update(r,d,o){if(r!==roof||d!==depth){roof=r;depth=d;mesh=r?(r.mesh??roofMesh(r.blocks,d,!!r.placed)):[];if(!r&&ctx)ctx.clearRect(0,0,canvas.width,canvas.height);}options=o;schedule();},zoom(factor){zoom=Math.max(.3,Math.min(12,zoom*factor));schedule();},fit(){zoom=1;offset=[0,0];schedule();},preset(name){({yaw,pitch,zoom,offset}=cameraPreset(name));schedule();}};
+}
+
+
+
+// Bridge 1: a lower curve, an upper curve and four tilted side beams, drawn in one elevation.
+// Both curves use the Curves tab's curve maths and block solver unchanged; this module only places them.
+// Bridge frame: x = 0 is the centre line, y as in the curve maths (the lower curve is not moved vertically).
+const bridgeGap=6;
+const bridgeBeamDefaults={height:30,thickness:2,tilt:8,spacing:3,position:-2};
+const bridgeBeamLimits={height:[1,96,1],thickness:[1,8,1],tilt:[0,45,1],spacing:[1,24,1],position:[-24,48,1]};
+// Grid width of a solved curve (the solver uses ceil(w) columns) and its shift onto the centre line.
+const gridWidth=c=>Math.ceil(c.w-1e-9);
+const centreShift=c=>-Math.floor(gridWidth(c)/2);
+// The upper curve starts as a copy of the lower curve's settings, turned upside down and lifted so that it mirrors
+// the lower curve across a horizontal line `gap` blocks above its crown. After that it has its own settings.
+function upperFromLower(lower,gap=bridgeGap){const c=curve(lower);return {params:{...lower},level:Math.round(2*c.h+gap-4),mirrored:true};}
+// Upper curve placement. `level` is where its baseline (the curve's end height of 4) sits.
+const upperY=(y,{level,mirrored})=>mirrored?level+4-y:y+level-4;
+function placeUpper(blocks,{level,mirrored}){return blocks.map(e=>mirrored?{...e,y:level+3-e.y,flip:e.type==='block'?false:!e.flip}:{...e,y:e.y+level-4});}
+// Defaults: lower = Curves tab defaults; upper = its mirror; beam pairs reach the upper curve's ends.
+function bridgeDefaults(lower={...curveDefaults}){const side={...bridgeBeamDefaults};return {lower:{...lower},upper:upperFromLower(lower),beams:{linked:true,left:{...side},right:{...side}}};}
+// Beams stand on the lowest point of the lower curve's underside.
+const beamBase=c=>Math.floor(c.min+1e-9);
+const clampBeam=b=>Object.fromEntries(Object.entries(bridgeBeamLimits).map(([k,[lo,hi]])=>[k,Math.max(lo,Math.min(hi,Math.round(Number(b?.[k]??bridgeBeamDefaults[k]))))]));
+// One side's pair, in a frame measured inward from the curve end: u = 0 is the first column inside the curve.
+// Both beams share one rasterisation (whole-block steps of the same tilt), so they are exactly parallel.
+function pairCells(beam){
+ const b=clampBeam(beam),pitch=b.thickness+b.spacing,slope=Math.tan(b.tilt*Math.PI/180),out=[];
+ const starts=Array.from({length:b.height},(_,r)=>Math.round(b.position-pitch/2-b.thickness/2+r*slope));
+ for(const [index,offset]of [[0,0],[1,pitch]])for(let r=0;r<b.height;r++){
+  // A one-block-thick beam that steps sideways keeps a shared face by widening the row below the step.
+  const from=starts[r],to=Math.max(from+b.thickness,(starts[r+1]??from)+1);
+  for(let u=from;u<to;u++)out.push({u:u+offset,r,beam:index});
+ }
+ return out;
+}
+// Four beams: two per side, mirrored about the lower curve's centre when both sides use the same settings.
+function bridgeBeams(lowerCurve,{left,right}){
+ const W=gridWidth(lowerCurve),s=centreShift(lowerCurve),base=beamBase(lowerCurve),out=[];
+ for(const [side,beam]of [['left',left],['right',right]])for(const {u,r,beam:i}of pairCells(beam)){
+  const x=side==='left'?s+u:s+W-1-u;
+  out.push({x,y:base+r,type:'block',part:'beam',group:'beam',beam:`${side}-${i?'inner':'outer'}`,side});
+ }
+ return out;
+}
+// The whole elevation. Solved block lists may be null while a curve is still being fitted.
+function bridgeModel({lower,upper,beams,lowerRoof=null,upperRoof=null}){
+ const lc=curve(lower),uc=curve(upper.params),ls=centreShift(lc),us=centreShift(uc);
+ const lowerBlocks=(lowerRoof?.blocks??[]).map(e=>({...e,x:e.x+ls,part:'lower'}));
+ const upperBlocks=placeUpper(upperRoof?.blocks??[],upper).map(e=>({...e,x:e.x+us,part:'upper'}));
+ const beamBlocks=bridgeBeams(lc,beams),elements=[...lowerBlocks,...beamBlocks,...upperBlocks].map(e=>({...e,layer:e.part}));
+ let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;for(const e of elements){minX=Math.min(minX,e.x);maxX=Math.max(maxX,e.x+1);minY=Math.min(minY,e.y);maxY=Math.max(maxY,e.y+1);}
+ return {elements,lowerCurve:lc,upperCurve:uc,lowerShift:ls,upperShift:us,base:beamBase(lc),bounds:{minX,maxX,minY,maxY}};
+}
+
+// Bridge 1: the Curves tab's curve generator twice (lower and upper curve) plus four side beams.
+// Each curve uses the same controls, handle editing, worker and block solver as the Curves tab.
+const $=s=>document.querySelector(s),clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),storageKey='minecraft-bridge1-design-v1';
+let state=bridgeDefaults(),locks={lower:false,upper:false},part='lower',mode3d=false,depth=12,mono=false,zoom=1,pan=[0,0],drag=null,frozenView=null,selected=-1,ready=false,saveTimer=0,sceneCache=null;
+const params=name=>name==='lower'?state.lower:state.upper.params;
+function setParams(name,p){if(name==='lower')state.lower=p;else state.upper.params=p;}
+const beamColor='#dedede',partNames={lower:'Lower curve',upper:'Upper curve'};
+// ---- Fitting: one worker job per curve, exactly as the Curves tab runs it ----
+function fitter(name){
+ const f={roof:null,pending:false,worker:null,timer:0,watchdog:0,request:0};
+ f.run=()=>{
+  clearTimeout(f.timer);clearTimeout(f.watchdog);f.worker?.terminate();f.worker=null;
+  const id=++f.request,input={...params(name),layout:'straight',onlyBlocks:$('#baseline').checked};f.pending=true;syncBusy();render();
+  const stop=()=>{clearTimeout(f.watchdog);f.worker?.terminate();f.worker=null;};
+  const finish=data=>{if(id!==f.request)return;stop();f.roof=data.roof;f.pending=false;selected=-1;syncBusy();render();scheduleSave();};
+  const fail=message=>{if(id!==f.request)return;stop();f.pending=false;syncBusy();$('#busy').textContent=message;$('#busy').hidden=false;};
+  let fallingBack=false;const fallback=()=>{if(id!==f.request||fallingBack)return;fallingBack=true;stop();setTimeout(()=>{if(id!==f.request)return;try{finish({roof:solve(curve(input),{onlyBlocks:input.onlyBlocks})});}catch(e){fail(e.message);}},0);};
+  f.timer=setTimeout(()=>{let url;try{if(globalThis.CURVE_WORKER_SOURCE){url=URL.createObjectURL(new Blob([globalThis.CURVE_WORKER_SOURCE],{type:'text/javascript'}));f.worker=new Worker(url);}else f.worker=new Worker('./worker.js',{type:'module'});f.worker.onmessage=({data})=>data.error?fail(data.error):finish(data);f.worker.onerror=e=>{e.preventDefault();fallback();};f.worker.onmessageerror=fallback;f.watchdog=setTimeout(fallback,8000);f.worker.postMessage(input);}catch{fallback();}finally{if(url)URL.revokeObjectURL(url);}},drag?130:60);
+ };
+ return f;
+}
+const fits={lower:fitter('lower'),upper:fitter('upper')};
+const busy=()=>fits.lower.pending||fits.upper.pending;
+function syncBusy(){const b=busy();$('#busy').hidden=!b;if(b)$('#busy').textContent='Finding the best fit…';$('#export').disabled=b;}
+// ---- Model ----
+const currentModel=()=>bridgeModel({lower:state.lower,upper:state.upper,beams:state.beams,lowerRoof:fits.lower.roof,upperRoof:fits.upper.roof});
+function scene(m){const key=JSON.stringify([state,depth]);if(sceneCache&&sceneCache.key===key&&sceneCache.lower===fits.lower.roof&&sceneCache.upper===fits.upper.roof)return sceneCache.model;const model=placeRoof({blocks:m.elements},depth);sceneCache={key,lower:fits.lower.roof,upper:fits.upper.roof,model};return model;}
+const shape=e=>e.type==='block'?'Full block':e.type==='slab'?`${e.flip?'Upper':'Lower'} slab`:`${e.flip?'Inverted':'Upright'} stair · full half ${placementDirection(e)}`;
+const partName=e=>e.part==='beam'?{'left-outer':'Left outer beam','left-inner':'Left inner beam','right-inner':'Right inner beam','right-outer':'Right outer beam'}[e.beam]:partNames[e.part];
+const describe=e=>`${partName(e)} · (${e.x}, ${e.y}) · ${shape(e)}`;
+const three=createRoof3D($('#preview3d'),(e,z)=>{$('#selected').textContent=describe(e)+` · z ${z}`;});
+function counts(blocks){$('#blocks').textContent=blocks.filter(e=>e.type==='block').length;$('#stairs').textContent=blocks.filter(e=>e.type==='left'||e.type==='right').length;$('#slabs').textContent=blocks.filter(e=>e.type==='slab').length;$('#beam-count').textContent=blocks.filter(e=>e.part==='beam').length;}
+// ---- Drawing ----
+function render(){
+ const box=$('#viewport').getBoundingClientRect();if(box.width<=0||box.height<=0)return;const m=currentModel();
+ if(mode3d){const placed=scene(m);counts(placed.blocks);three.update(placed,depth,{mono,grid:$('#grid').checked,pending:busy(),...(mono?{}:{groupColors:{beam:beamColor}})});$('#dimensions').textContent=`${placed.maxX-placed.minX} × ${placed.maxZ-placed.minZ} footprint`;return;}
+ counts(m.elements);draw2D(m,box);
+}
+function draw2D(m,box){
+ const svg=$('#preview'),u=state.upper,lc=m.lowerCurve,uc=m.upperCurve;
+ const lines={lower:[lc.points,lc.inner].map(pts=>pts.map(([x,y])=>[x+m.lowerShift,y])),upper:[uc.points,uc.inner].map(pts=>pts.map(([x,y])=>[x+m.upperShift,upperY(y,u)]))};
+ let {minX,maxX,minY,maxY}=m.bounds;for(const pts of [...lines.lower,...lines.upper])for(const [x,y]of pts){minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);}
+ const aspect=box.width/box.height,baseW=Math.max(maxX-minX+6,(maxY-minY+6)*aspect),baseH=baseW/aspect;
+ const view=frozenView??[(minX+maxX)/2-baseW/(2*zoom)-pan[0],-(maxY+minY)/2-baseH/(2*zoom)-pan[1],baseW/zoom,baseH/zoom];svg.setAttribute('viewBox',view.join(' '));const unit=view[2]/box.width;
+ let html='<defs><pattern id="grid-pattern" width="1" height="1" patternUnits="userSpaceOnUse"><path d="M 1 0 H 0 V 1" fill="none" stroke="#3e3e3e" stroke-width=".024"/></pattern></defs>';
+ if($('#grid').checked)html+='<rect x="-2000" y="-2000" width="4000" height="4000" fill="url(#grid-pattern)"/>';
+ const fill=e=>mono?'#a9a9a9':e.part==='beam'?beamColor:e.type==='block'?'#b0b0b0':e.type==='slab'?'#bababa':'#818181';
+ for(const name of ['lower','beam','upper']){
+  html+=`<g transform="scale(1 -1)" opacity="${fits[name]?.pending?.4:1}">`;
+  m.elements.forEach((e,i)=>{if(e.part!==name)return;html+=`<polygon class="tile ${selected===i?'selected':''}" data-index="${i}" points="${polygon(e).map(a=>a.join(',')).join(' ')}" fill="${fill(e)}" stroke="#343434" stroke-width=".025"><title>${describe(e)}</title></polygon>`;});
+  html+='</g>';
+ }
+ if($('#reference').checked)for(const name of ['lower','upper'])for(const [pts,dash]of [[lines[name][0],''],[lines[name][1],'5 4']])html+=`<polyline points="${pts.map(([x,y])=>`${x},${-y}`).join(' ')}" fill="none" stroke="${name==='lower'?'#aeaeae':'#c9c9c9'}" stroke-width="1.5" vector-effect="non-scaling-stroke" stroke-dasharray="${dash}" pointer-events="none"/>`;
+ for(const [name,c,shift]of [['lower',lc,m.lowerShift],['upper',uc,m.upperShift]])if(locks[name])html+=`<line x1="${shift+c.w/2}" x2="${shift+c.w/2}" y1="${view[1]}" y2="${view[1]+view[3]}" stroke="#c5c5c5" stroke-opacity=".45" stroke-dasharray="4 5" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
+ // Handles: the curve whose settings are open is drawn at full strength.
+ if($('#handles').checked)for(const [name,c,shift,map]of [['lower',lc,m.lowerShift,y=>y],['upper',uc,m.upperShift,y=>upperY(y,u)]])c.handles.forEach(([x,y],i)=>{const hx=x+shift,hy=map(y),label=`${partNames[name]}: ${['left endpoint','bend position and rise','right endpoint','extra bend'][i]}`;
+  html+=`<g class="handle" data-curve="${name}" data-handle="${i}" role="slider" tabindex="0" aria-label="${label}" aria-valuenow="${hy.toFixed(1)}" aria-valuetext="x ${hx.toFixed(1)}, y ${hy.toFixed(1)}" opacity="${part===name?1:.55}"><circle cx="${hx}" cy="${-hy}" r="${(matchMedia('(pointer:coarse)').matches?22:13)*unit}" fill="transparent"/><circle cx="${hx}" cy="${-hy}" r="${5.5*unit}" fill="#d2d2d2" stroke="#272727" stroke-width="2" vector-effect="non-scaling-stroke"/><title>${label} · ${i===1?'Hold Shift to centre':'Drag to shape'}</title></g>`;});
+ const focused=document.activeElement?.closest?.('[data-handle]'),keep=focused&&[focused.dataset.curve,focused.dataset.handle];svg.innerHTML=html;
+ if(keep)svg.querySelector(`[data-curve="${keep[0]}"][data-handle="${keep[1]}"]`)?.focus({preventScroll:true});
+ $('#dimensions').textContent=`${gridWidth(lc)} wide · ${m.bounds.maxY-m.bounds.minY} high`;$('#drag-hint').hidden=!$('#handles').checked;
+}
+// ---- Curve settings (shared Curves tab controls) ----
+function mountCurve(name){const p=params(name);$(`#${name}-type`).value=p.type;$(`#${name}-extra`).textContent=p.extraEnabled?'Remove point':'Add point';$(`#${name}-thickness`).value=p.thickness;const lock=$(`#${name}-lock`);lock.setAttribute('aria-pressed',String(locks[name]));lock.textContent=locks[name]?'Unlock centre':'Lock centre';
+ mountCurveControls($(`#${name}-controls`),p,(key,value)=>{params(name)[key]=value;fits[name].run();},{prefix:name+'-',centerLocked:locks[name]});}
+function mountUpperPlacement(){$('#upper-level').value=state.upper.level;$('#upper-mirrored').checked=state.upper.mirrored;}
+// The upper curve is drawn upside down when mirrored, so its handles move with the pointer: vertical drags are inverted.
+// Both curves sit centred on the bridge, so dragging an end widens both sides and the dragged end follows the pointer.
+function setHandle(name,index,dx,dy,original,originalCurve,center=false){
+ const flip=name==='upper'&&state.upper.mirrored?-1:1,sideways=index===0||index===2?2:1;
+ setParams(name,editCurveHandle(original,index,dx*sideways,dy*flip,{originalCurve,center:center||locks[name]}));mountCurve(name);fits[name].run();
+}
+for(const name of ['lower','upper']){
+ $(`#${name}-type`).onchange=e=>{setParams(name,changeCurveType(params(name),e.target.value));zoom=1;pan=[0,0];mountCurve(name);fits[name].run();};
+ $(`#${name}-extra`).onclick=()=>{setParams(name,toggleExtraPoint(params(name)));mountCurve(name);fits[name].run();};
+ $(`#${name}-thickness`).oninput=e=>{if(e.target.value===''||!Number.isFinite(+e.target.value))return;params(name).thickness=clamp(+e.target.value,1,6);fits[name].run();};
+ $(`#${name}-thickness`).onchange=e=>{e.target.value=params(name).thickness;};
+ $(`#${name}-lock`).onclick=()=>{locks[name]=!locks[name];if(locks[name]){$('#handles').checked=true;const p={...params(name)};setHandle(name,1,0,0,p,curve(p),true);}else{mountCurve(name);render();}scheduleSave();};
+}
+$('#upper-level').oninput=e=>{if(e.target.value===''||!Number.isFinite(+e.target.value))return;state.upper.level=clamp(Math.round(+e.target.value),-256,256);render();scheduleSave();};
+$('#upper-level').onchange=()=>mountUpperPlacement();
+$('#upper-mirrored').onchange=e=>{state.upper.mirrored=e.target.checked;render();scheduleSave();};
+// One-off copy: the upper curve becomes the lower curve's mirror image again, then stays independent.
+$('#upper-mirror').onclick=()=>{state.upper=upperFromLower(state.lower);locks.upper=locks.lower;mountCurve('upper');mountUpperPlacement();fits.upper.run();};
+// ---- Beam settings ----
+const beamLabels={height:'Height',thickness:'Thickness',tilt:'Tilt °',spacing:'Spacing',position:'Position'};
+const beamTitles={height:'Beam height in blocks',thickness:'Beam width in blocks',tilt:'Lean towards the centre, in degrees from vertical',spacing:'Gap between the two beams of a pair, in blocks',position:"Distance of the pair's centre from the end of the lower curve; positive moves it inwards"};
+function mountBeams(){
+ const b=state.beams,box=$('#beam-controls'),specs=Object.entries(bridgeBeamLimits);$('#beams-linked').checked=b.linked;
+ const attrs=(lo,hi,step)=>`min="${lo}" max="${hi}" step="${step}"`;
+ box.innerHTML=b.linked?specs.map(([k,[lo,hi,step]])=>`<div class="control" title="${beamTitles[k]}"><div class="control-head"><label for="beam-${k}-range">${beamLabels[k]}</label><input id="beam-${k}-number" data-key="${k}" data-side="both" type="number" ${attrs(lo,hi,step)} value="${b.left[k]}" aria-label="${beamLabels[k]}"></div><input id="beam-${k}-range" data-key="${k}" data-side="both" type="range" ${attrs(lo,hi,step)} value="${b.left[k]}" aria-label="${beamLabels[k]}"></div>`).join('')
+  :`<div class="pair head"><span></span><span>Left</span><span>Right</span></div>`+specs.map(([k,[lo,hi,step]])=>`<div class="pair" title="${beamTitles[k]}"><label for="beam-${k}-left">${beamLabels[k]}</label>${['left','right'].map(side=>`<input id="beam-${k}-${side}" data-key="${k}" data-side="${side}" type="number" ${attrs(lo,hi,step)} value="${b[side][k]}" aria-label="${beamLabels[k]} ${side}">`).join('')}</div>`).join('');
+ for(const input of box.querySelectorAll('input')){
+  const {key,side}=input.dataset,[lo,hi]=bridgeBeamLimits[key];
+  input.oninput=()=>{if(input.value===''||!Number.isFinite(+input.value))return;const v=clamp(Math.round(+input.value),lo,hi);for(const s of side==='both'?['left','right']:[side])b[s][key]=v;if(side==='both')for(const other of box.querySelectorAll(`[data-key="${key}"]`))if(other!==input)other.value=v;sceneCache=null;render();scheduleSave();};
+  input.onchange=()=>{input.value=b[side==='both'?'left':side][key];};
+ }
+}
+$('#beams-linked').onchange=e=>{state.beams.linked=e.target.checked;if(e.target.checked)state.beams.right={...state.beams.left};mountBeams();render();scheduleSave();};
+// ---- Panel ----
+function showPart(name){part=name;for(const n of ['lower','beams','upper']){$(`#${n}-panel`).hidden=n!==name;$(`#part-${n}`).setAttribute('aria-pressed',String(n===name));}render();}
+for(const n of ['lower','beams','upper'])$(`#part-${n}`).onclick=()=>{showPart(n);scheduleSave();};
+$('#open-controls').onclick=()=>document.body.classList.add('editing');
+for(const id of ['#close-controls','#sheet-shade'])$(id).onclick=()=>document.body.classList.remove('editing');
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.body.classList.remove('editing');const menu=$('.display-settings');if(menu.open){menu.open=false;menu.querySelector('summary').focus();}}});
+document.addEventListener('pointerdown',e=>{const menu=$('.display-settings');if(menu.open&&!menu.contains(e.target))menu.open=false;});
+// ---- 2D interaction (as in the Curves tab) ----
+const svg=$('#preview'),world=e=>new DOMPoint(e.clientX,e.clientY).matrixTransform(svg.getScreenCTM().inverse());
+svg.onpointerdown=e=>{if(e.button!==0)return;const h=e.target.closest('[data-handle]'),name=h?.dataset.curve??null;
+ drag={x:e.clientX,y:e.clientY,point:world(e),pan:[...pan],target:e.target,curve:name,handle:h?+h.dataset.handle:null,original:name?{...params(name)}:null,c:name?curve(params(name)):null,dx:0,dy:0,moved:false};
+ const vb=svg.viewBox.baseVal;frozenView=[vb.x,vb.y,vb.width,vb.height];svg.setPointerCapture(e.pointerId);if(name&&part!==name)showPart(name);
+ if(drag.handle===1&&e.shiftKey)setHandle(name,1,0,0,drag.original,drag.c,true);e.preventDefault();};
+svg.onpointermove=e=>{if(!drag)return;drag.moved||=Math.hypot(e.clientX-drag.x,e.clientY-drag.y)>3;
+ if(drag.handle!==null){const pt=world(e);drag.dx=pt.x-drag.point.x;drag.dy=drag.point.y-pt.y;setHandle(drag.curve,drag.handle,drag.dx,drag.dy,drag.original,drag.c,e.shiftKey);}
+ else{const scale=frozenView[2]/svg.clientWidth,dx=(e.clientX-drag.x)*scale,dy=(e.clientY-drag.y)*scale;pan=[drag.pan[0]+dx,drag.pan[1]+dy];const vb=svg.viewBox.baseVal;svg.setAttribute('viewBox',`${frozenView[0]-dx} ${frozenView[1]-dy} ${vb.width} ${vb.height}`);}};
+svg.onpointerup=e=>{if(!drag)return;if(!drag.moved&&drag.handle===null&&drag.target.dataset.index!==undefined){selected=+drag.target.dataset.index;const el=currentModel().elements[selected];if(el){$('#selected').textContent=describe(el);if(el.part!=='beam'&&part!==el.part)showPart(el.part);else if(el.part==='beam'&&part!=='beams')showPart('beams');}}
+ const moved=drag.handle!==null;frozenView=null;drag=null;render();if(moved)scheduleSave();if(svg.hasPointerCapture(e.pointerId))svg.releasePointerCapture(e.pointerId);};
+svg.onpointercancel=()=>{drag=null;frozenView=null;render();};
+for(const event of ['keydown','keyup'])document.addEventListener(event,e=>{if(e.key==='Shift'&&drag?.handle===1){e.preventDefault();setHandle(drag.curve,1,drag.dx,drag.dy,drag.original,drag.c,e.shiftKey);}});
+svg.onkeydown=e=>{const h=e.target.closest('[data-handle]');if(!h||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();const name=h.dataset.curve,i=+h.dataset.handle,d=e.shiftKey?1:.5,p={...params(name)};if(part!==name)showPart(name);setHandle(name,i,e.key==='ArrowLeft'?-d:e.key==='ArrowRight'?d:0,e.key==='ArrowUp'?d:e.key==='ArrowDown'?-d:0,p,curve(p));scheduleSave();};
+svg.addEventListener('wheel',e=>{e.preventDefault();zoom=clamp(zoom*Math.exp(-e.deltaY*.001),.5,12);render();},{passive:false});
+// ---- View, display and actions ----
+function setView(value){mode3d=value;document.body.classList.toggle('mode3d',value);$('#preview').toggleAttribute('hidden',value);$('#preview3d').hidden=!value;$('#depth-control').hidden=!value;$('#camera-controls').hidden=!value;$('#view-2d').setAttribute('aria-pressed',String(!value));$('#view-3d').setAttribute('aria-pressed',String(value));$('#handles').disabled=value;$('#reference').disabled=value;$('#selected').textContent=value?'3D bridge · counts include depth':'2D elevation · counts for one layer';render();}
+$('#view-2d').onclick=()=>{setView(false);scheduleSave();};$('#view-3d').onclick=()=>{setView(true);scheduleSave();};
+$('#depth').oninput=e=>{if(e.target.value===''||!Number.isFinite(+e.target.value))return;depth=clamp(Math.round(+e.target.value),1,32);render();scheduleSave();};$('#depth').onchange=()=>$('#depth').value=depth;
+for(const preset of ['outside','inside','top'])$('#'+preset).onclick=()=>three.preset(preset);
+for(const id of ['reference','grid','handles'])$('#'+id).onchange=()=>{render();scheduleSave();};
+$('#baseline').onchange=()=>{fits.lower.run();fits.upper.run();};
+function setMono(on){mono=on;$('#mono').setAttribute('aria-pressed',String(mono));document.body.classList.toggle('mono',mono);}
+$('#mono').onclick=()=>{setMono(!mono);render();scheduleSave();};
+$('#plus').onclick=()=>{if(mode3d){three.zoom(1.3);return;}zoom=clamp(zoom*1.3,.5,12);render();};$('#minus').onclick=()=>{if(mode3d){three.zoom(1/1.3);return;}zoom=clamp(zoom/1.3,.5,12);render();};$('#fit').onclick=()=>{if(mode3d){three.fit();return;}zoom=1;pan=[0,0];render();};
+$('#export').onclick=()=>{if(busy())return;const m=currentModel(),placed=mode3d?scene(m):placeRoof({blocks:m.elements},1),rows=['x,y,z,element,placement,full_half_direction,part'];
+ for(const e of placed.blocks)rows.push(`${e.x},${e.y},${e.z},${['left','right'].includes(e.type)?'stair':e.type},${e.type==='block'?'full':e.type==='slab'?(e.flip?'top':'bottom'):(e.flip?'inverted':'upright')},${placementDirection(e)},${e.part==='beam'?e.beam+'-beam':e.part}`);
+ const url=URL.createObjectURL(new Blob([rows.join('\n')],{type:'text/csv'})),a=document.createElement('a');a.href=url;a.download='minecraft-bridge-1.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+function mountAll(){mountCurve('lower');mountCurve('upper');mountUpperPlacement();mountBeams();}
+$('#reset').onclick=()=>{state=bridgeDefaults();locks={lower:false,upper:false};zoom=1;pan=[0,0];frozenView=null;selected=-1;$('#baseline').checked=false;$('#selected').textContent='1 square = 1 block';mountAll();showPart('lower');fits.lower.run();fits.upper.run();};
+new ResizeObserver(render).observe($('#viewport'));
+// ---- State: autosave, blueprints ----
+function scheduleSave(){if(!ready)return;clearTimeout(saveTimer);saveTimer=setTimeout(()=>{try{localStorage.setItem(storageKey,JSON.stringify(globalThis.bridge1State.capture()));}catch{}},400);}
+globalThis.bridge1State={
+ capture:()=>({lower:{...state.lower},upper:{params:{...state.upper.params},level:state.upper.level,mirrored:state.upper.mirrored},beams:{linked:state.beams.linked,left:{...state.beams.left},right:{...state.beams.right}},locks:{...locks},onlyBlocks:$('#baseline').checked,display:Object.fromEntries(['reference','grid','handles'].map(id=>[id,$('#'+id).checked])),mono,mode3d,depth,part,zoom,pan:[...pan],camera:three.getState()}),
+ restore(input){const s=validateBridge1State(input);state={lower:{...s.lower},upper:{params:{...s.upper.params},level:s.upper.level,mirrored:s.upper.mirrored},beams:{linked:s.beams.linked,left:{...s.beams.left},right:{...s.beams.right}}};locks={...s.locks};depth=s.depth;zoom=s.zoom;pan=[...s.pan];drag=null;frozenView=null;selected=-1;sceneCache=null;
+  $('#baseline').checked=s.onlyBlocks;for(const [id,v]of Object.entries(s.display))$('#'+id).checked=v;$('#depth').value=depth;setMono(s.mono);mountAll();showPart(s.part);setView(s.mode3d);three.setState(s.camera);fits.lower.run();fits.upper.run();}
+};
+mountAll();showPart('lower');fits.lower.run();fits.upper.run();
+try{const saved=JSON.parse(localStorage.getItem(storageKey)??'null');if(saved)globalThis.bridge1State.restore(saved);}catch{}
+ready=true;
+
+})();</script></body></html>

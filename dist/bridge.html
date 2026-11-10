@@ -16,10 +16,17 @@ function placeRoof(roof,depth,layout='straight',run=null){
  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity,minZ=Infinity,maxZ=-Infinity;for(const e of blocks){minX=Math.min(minX,e.x);maxX=Math.max(maxX,e.x+1);minY=Math.min(minY,e.y);maxY=Math.max(maxY,e.y+1);minZ=Math.min(minZ,e.z);maxZ=Math.max(maxZ,e.z+1);}
  return {blocks,placed:true,layout,minX,maxX,minY,maxY,minZ,maxZ};
 }
-function occupiedVoxels(blocks){
- const voxels=new Map();blocks.forEach((e,id)=>{const mask=e.type==='block'?[1,1,1,1]:e.type==='slab'?[1,1,0,0]:e.type==='right'?[1,1,0,1]:[1,1,1,0];for(let a=0;a<2;a++)for(let y=0;y<2;y++)for(let b=0;b<2;b++){const side=e.axis==='z'?b:a,localY=e.flip?1-y:y;if(mask[localY*2+side])voxels.set(`${e.x*2+a},${e.y*2+y},${e.z*2+b}`,id);}});return voxels;
+// Half-block voxels of one element. An inner-corner stair keeps a full bottom and three raised quarters, lowering only (lowX, lowZ).
+// An outer-corner stair keeps a full bottom and raises only the quarter (hiX, hiZ). Flipped pieces are upside down.
+function forEachVoxel(e,fn){
+ if(e.type==='outer'){for(let a=0;a<2;a++)for(let y=0;y<2;y++)for(let b=0;b<2;b++){const localY=e.flip?1-y:y;if(localY===0||(a===e.hiX&&b===e.hiZ))fn(e.x*2+a,e.y*2+y,e.z*2+b);}return;}
+ if(e.type==='corner'){for(let a=0;a<2;a++)for(let y=0;y<2;y++)for(let b=0;b<2;b++){const localY=e.flip?1-y:y;if(localY===0||a!==e.lowX||b!==e.lowZ)fn(e.x*2+a,e.y*2+y,e.z*2+b);}return;}
+ const mask=e.type==='block'?[1,1,1,1]:e.type==='slab'?[1,1,0,0]:e.type==='right'?[1,1,0,1]:[1,1,1,0];for(let a=0;a<2;a++)for(let y=0;y<2;y++)for(let b=0;b<2;b++){const side=e.axis==='z'?b:a,localY=e.flip?1-y:y;if(mask[localY*2+side])fn(e.x*2+a,e.y*2+y,e.z*2+b);}
 }
-function placementDirection(e){return e.type==='left'||e.type==='right'?(e.type==='right'?'+':'-')+(e.axis==='z'?'Z':'X'):'';}
+function occupiedVoxels(blocks){
+ const voxels=new Map();blocks.forEach((e,id)=>forEachVoxel(e,(x,y,z)=>voxels.set(x+','+y+','+z,id)));return voxels;
+}
+function placementDirection(e){if(e.type==='outer')return (e.hiX?'+':'-')+'X'+(e.hiZ?'+':'-')+'Z';if(e.type==='corner')return (e.lowX?'-':'+')+'X'+(e.lowZ?'-':'+')+'Z';return e.type==='left'||e.type==='right'?(e.type==='right'?'+':'-')+(e.axis==='z'?'Z':'X'):'';}
 
 function roofMesh(blocks,depth=1,placed=false){
  const placements=placed?blocks:placeRoof({blocks},depth).blocks;
@@ -31,6 +38,8 @@ function roofMesh(blocks,depth=1,placed=false){
  const pts=[[u,v],[u+w,v],[u+w,v+h],[u,v+h]].map(([a,b])=>{const p=[];p[g.axis]=g.plane/2;p[g.axes[0]]=a/2;p[g.axes[1]]=b/2;return p;}),normal=[0,0,0];normal[g.axis]=g.sign;faces.push({pts,normal,id:g.id,z:placements[g.id].z});}
  return faces;
 }
+// Shared camera presets for every 3D view (roofs and terrain).
+function cameraPreset(name){return {yaw:name==='front'||name==='top'?0:-.62,pitch:name==='top'?Math.PI/2:name==='inside'?-.6:name==='front'?0:.38,zoom:1,offset:[0,0]};}
 function createRoof3D(canvas,onSelect){
  const ctx=canvas.getContext('2d');let yaw=-.62,pitch=.38,zoom=1,offset=[0,0],drag=null,roof,depth=12,mesh=[],options={},projected=[],frame;
  const colors={block:'#b0b0b0',slab:'#bababa',left:'#818181',right:'#818181'};
@@ -50,48 +59,178 @@ function createRoof3D(canvas,onSelect){
  canvas.oncontextmenu=e=>e.preventDefault();canvas.onpointerdown=e=>{drag={x:e.clientX,y:e.clientY,yaw,pitch,offset:[...offset],pan:e.shiftKey||e.button===2,moved:false};canvas.setPointerCapture(e.pointerId);e.preventDefault();};canvas.onpointermove=e=>{if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;drag.moved||=Math.hypot(dx,dy)>3;if(drag.pan)offset=[drag.offset[0]+dx,drag.offset[1]+dy];else{yaw=drag.yaw+dx*.008;pitch=Math.max(-1.5,Math.min(1.5,drag.pitch+dy*.008));}schedule();};
  canvas.onpointerup=e=>{if(drag&&!drag.moved){const rect=canvas.getBoundingClientRect(),x=e.clientX-rect.left,y=e.clientY-rect.top;for(let i=projected.length-1;i>=0;i--){const f=projected[i];let inside=false;for(let j=0,k=f.pts.length-1;j<f.pts.length;k=j++){const a=f.pts[j],b=f.pts[k];if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])inside=!inside;}if(inside){onSelect(roof.blocks[f.id],f.z);break;}}}drag=null;if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);};canvas.onpointercancel=()=>drag=null;
  canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.3,Math.min(12,zoom*Math.exp(-e.deltaY*.001)));schedule();},{passive:false});canvas.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();yaw+=e.key==='ArrowLeft'?-.12:e.key==='ArrowRight'?.12:0;pitch=Math.max(-1.5,Math.min(1.5,pitch+(e.key==='ArrowUp'?.12:e.key==='ArrowDown'?-.12:0)));schedule();};
- return {getState(){return {yaw,pitch,zoom,offset:[...offset]};},setState(s){yaw=s.yaw;pitch=s.pitch;zoom=s.zoom;offset=[...s.offset];schedule();},update(r,d,o){if(r!==roof||d!==depth){roof=r;depth=d;mesh=r?(r.mesh??roofMesh(r.blocks,d,!!r.placed)):[];if(!r&&ctx)ctx.clearRect(0,0,canvas.width,canvas.height);}options=o;schedule();},zoom(factor){zoom=Math.max(.3,Math.min(12,zoom*factor));schedule();},fit(){zoom=1;offset=[0,0];schedule();},preset(name){yaw=name==='front'||name==='top'?0:-.62;pitch=name==='top'?Math.PI/2:name==='inside'?-.6:name==='front'?0:.38;zoom=1;offset=[0,0];schedule();}};
+ return {getState(){return {yaw,pitch,zoom,offset:[...offset]};},setState(s){yaw=s.yaw;pitch=s.pitch;zoom=s.zoom;offset=[...s.offset];schedule();},update(r,d,o){if(r!==roof||d!==depth){roof=r;depth=d;mesh=r?(r.mesh??roofMesh(r.blocks,d,!!r.placed)):[];if(!r&&ctx)ctx.clearRect(0,0,canvas.width,canvas.height);}options=o;schedule();},zoom(factor){zoom=Math.max(.3,Math.min(12,zoom*factor));schedule();},fit(){zoom=1;offset=[0,0];schedule();},preset(name){({yaw,pitch,zoom,offset}=cameraPreset(name));schedule();}};
 }
 
 
 
-// Seeded integer terrain: fixed river/top spans, with irregular ledges and ridgelines.
-function ravineGap(y){return Math.round(37+41*(Math.max(0,Math.min(49,y))/49)**.9);}
+// Chunky terraced ravine on a typed voxel grid.
+// The envelope matches the original design: 37-block river gap, 78-block gap at the rim (Y 49),
+// summits up to Y 57, outer flanks about 66-71 blocks from the centre, 36 blocks along the river.
+// Detail is deliberately coarse: cliffs step in 4-block terraces, relief changes every 6 blocks along
+// the river and materials follow bands, so equal faces merge into a few large quads.
+const ravineDepth=36;
+const rim=49,band=4,chunk=6,chunks=ravineDepth/chunk,top=57;
+const ravineMaterials=['','rock','rock-light','rock-dark','strata','grass','soil','gravel','riverbed','water'];
+const id=Object.fromEntries(ravineMaterials.map((name,i)=>[name,i]));
+// Summit heights for each 6-block stretch along the river (left, right flank), taken from the original terrain.
+const peaks={left:[57,57,57,54,57,57],right:[57,56,54,56,57,57]},summitWidth=5;
+function ravineGap(y){return Math.round(37+41*(Math.max(0,Math.min(rim,y))/rim)**.9);}
+const terrace=y=>y<=0?0:Math.floor((Math.min(y,rim)-1)/band)+1;
+const terraceBase=y=>{const t=terrace(y);return t?band*(t-1)+1:0;};
+const stretch=z=>Math.max(0,Math.min(chunks-1,Math.floor(z/chunk)));
+// Inner cliff edges: [first open x, first rock x on the right]. Constant across each terrace and stretch.
 function ravineEdges(y,z){
- const t=Math.max(0,Math.min(1,y/49)),gap=ravineGap(y),meander=Math.round(2*Math.sin(z*.19)),rough=Math.sin(Math.PI*t);
- const left=-Math.floor(gap/2)+meander-Math.round(rough*(2*Math.sin(z*.47+y*.24)+Math.sin(z*.91-y*.38)));
- const right=left+gap+Math.round(rough*(2*Math.sin(z*.32-y*.19)));
+ const base=terraceBase(y),t=terrace(y),c=stretch(z),gap=ravineGap(base),rough=Math.sin(Math.PI*base/rim);
+ const meander=Math.round(2*Math.sin((c*chunk+chunk/2)*.19));
+ const left=-Math.floor(gap/2)+meander-Math.round(rough*2*Math.sin(c*1.7+t*.9));
+ const right=-Math.floor(gap/2)+meander+gap+Math.round(rough*2*Math.sin(c*2.3-t*.7+1));
  return [left,right];
 }
+// Outer flank: tapers from about 66 blocks out at the river to about 51 at the summits.
+function outerEdge(y,c,side){const lean=side<0?3*Math.sin(c*1.5)+2:3*Math.sin(c*1.2+1.6)+2;return Math.round(66-15*(Math.min(y,top)/50)**1.4+lean);}
+const hash=(a,b,c)=>{const n=Math.sin(a*12.9898+b*37.719+c*78.233)*43758.5453;return n-Math.floor(n);};
 function createRavine(){
- const blocks=[],occupied=new Map(),depth=36;
- const noise=(x,y,z)=>{const n=Math.sin(x*12.9898+y*37.719+z*78.233)*43758.5453;return n-Math.floor(n);};
- const add=(x,y,z,group)=>{const id=blocks.length;blocks.push({x,y,z,type:'block',group});occupied.set(`${x},${y},${z}`,id);};
- for(let z=0;z<depth;z++){
-  for(let y=0;y<58;y++){
-   let [left,right]=ravineEdges(y,z);
-   // Above the nominal cliff rim the two sides form different broken summits.
-   if(y>49){left-=Math.ceil((y-49)*(1.1+.3*Math.sin(z*.4)));right+=Math.ceil((y-49)*(1.2+.3*Math.cos(z*.3)));}
-   const outerLeft=-Math.round(66-15*(y/50)**1.4+3*Math.sin(z*.25)+2*Math.sin(z*.67+y*.11));
-   const outerRight=Math.round(66-15*(y/50)**1.4+4*Math.sin(z*.21+1.6)+2*Math.cos(z*.56-y*.15));
-   for(let x=outerLeft;x<outerRight;x++)if(x<left||x>=right){const n=noise(x,y,z);add(x,y,z,n>.91?'rock-light':n<.1?'rock-dark':Math.sin(y*.55+z*.12+x*.04)>.8?'strata':'rock');}
+ const minX=-73,maxX=74,minY=-1,maxY=top+1,nx=maxX-minX,ny=maxY-minY,nz=ravineDepth,cells=new Uint8Array(nx*ny*nz);
+ const index=(x,y,z)=>(x-minX)+nx*((y-minY)+ny*z);
+ const set=(x,y,z,m)=>{cells[index(x,y,z)]=m;};
+ const at=(x,y,z)=>x<minX||x>=maxX||y<minY||y>=maxY||z<0||z>=nz?0:cells[index(x,y,z)];
+ // Rock body: each flank is a stack of terraces; above the rim the summits narrow in 2-block tiers.
+ const body=y=>y<=3?id['rock-dark']:y>=53?id['rock-light']:y%14>=8&&y%14<=9?id.strata:id.rock;
+ for(let z=0;z<nz;z++){
+  const c=stretch(z),zc=c*chunk+chunk/2;
+  for(let y=0;y<=top;y++){
+   let [left,right]=ravineEdges(y,z);const tierY=y>rim?rim+2*Math.ceil((y-rim)/2):terraceBase(y);
+   if(y>rim){const rise=tierY-rim;left-=Math.ceil(rise*(1.1+.3*Math.sin(zc*.4)));right+=Math.ceil(rise*(1.2+.3*Math.cos(zc*.3)));}
+   const outerLeft=-outerEdge(tierY,c,-1),outerRight=outerEdge(tierY,c,1);
+   // Summits keep a crest instead of thinning out below their designed height.
+   if(y>rim){left=Math.max(left,outerLeft+summitWidth);right=Math.min(right,outerRight-summitWidth);}
+   if(y<=peaks.left[c])for(let x=outerLeft;x<left;x++)set(x,y,z,body(y));
+   if(y<=peaks.right[c])for(let x=right;x<outerRight;x++)set(x,y,z,body(y));
   }
   const [left,right]=ravineEdges(0,z);
-  for(let x=left;x<right;x++){add(x,-1,z,'riverbed');add(x,0,z,'water');}
+  for(let x=left;x<right;x++){set(x,-1,z,id.riverbed);set(x,0,z,id.water);}
  }
- // Weathered caps and thin soil on exposed upper terraces, not a flat roof.
- for(const b of blocks)if(b.y>30&&!occupied.has(`${b.x},${b.y+1},${b.z}`)){
-  b.group=b.y>52?'rock-light':noise(b.x,0,b.z)>.18?'grass':'gravel';
-  for(let d=1;d<=2;d++){const id=occupied.get(`${b.x},${b.y-d},${b.z}`);if(id!==undefined&&b.group==='grass')blocks[id].group='soil';}
+ // Exposed upper ledges: grass with a soil band beneath, gravel patches per terrace, bare rock on the summits.
+ for(let z=0;z<nz;z++)for(let x=minX;x<maxX;x++)for(let y=top;y>30;y--){
+  if(!at(x,y,z))continue;
+  const cover=y>52?id['rock-light']:hash(stretch(z),terrace(y),Math.sign(x))<.25?id.gravel:id.grass;set(x,y,z,cover);
+  if(cover===id.grass)for(let d=1;d<=2;d++)if(at(x,y-d,z))set(x,y-d,z,id.soil);
+  break;
  }
- const mesh=[];
- for(let id=0;id<blocks.length;id++){const b=blocks[id],p=[b.x,b.y,b.z];for(let axis=0;axis<3;axis++)for(const sign of [-1,1]){const next=[...p];next[axis]+=sign;if(occupied.has(next.join(',')))continue;const axes=[0,1,2].filter(a=>a!==axis),pts=[[0,0],[1,0],[1,1],[0,1]].map(([u,v])=>{const q=[...p];q[axis]+=sign>0?1:0;q[axes[0]]+=u;q[axes[1]]+=v;return q;}),normal=[0,0,0];normal[axis]=sign;mesh.push({pts,normal,id,z:b.z});}}
- let minX=0,maxX=0,maxY=0;for(const b of blocks){minX=Math.min(minX,b.x);maxX=Math.max(maxX,b.x+1);maxY=Math.max(maxY,b.y+1);}
- return {blocks,mesh,placed:true,minX,maxX,minY:-1,maxY,minZ:0,maxZ:depth,groundY:-1,dimensions:{height:50,bottomGap:37,topGap:78,depth}};
+ const mesh=greedyMesh(at,[minX,minY,0],[maxX,maxY,nz]);
+ let solid=0,water=0;for(const m of cells){if(m)solid++;if(m===id.water)water++;}
+ let lo=Infinity,hi=-Infinity;for(const f of mesh)for(const p of f.pts){lo=Math.min(lo,p[0]);hi=Math.max(hi,p[0]);}
+ return {materials:ravineMaterials,materialAt:(x,y,z)=>ravineMaterials[at(x,y,z)],mesh,meshWith:limit=>greedyMesh(at,[minX,minY,0],[maxX,maxY,nz],limit),solid,water,placed:true,minX:lo,maxX:hi,minY,maxY,minZ:0,maxZ:nz,groundY:minY,dimensions:{height:50,bottomGap:37,topGap:78,depth:nz}};
+}
+// Merge exposed faces of equal material into rectangles, one plane at a time. `max` limits a rectangle's
+// side (the Canvas fallback sorts faces by depth, which needs small faces); the WebGL view uses no limit.
+function greedyMesh(at,min,max,limit=Infinity){
+ const faces=[],size=[0,1,2].map(a=>max[a]-min[a]);
+ for(let d=0;d<3;d++){
+  const u=(d+1)%3,v=(d+2)%3,du=size[u],dv=size[v],mask=new Uint8Array(du*dv),p=[0,0,0];
+  for(const sign of [-1,1])for(let s=0;s<size[d];s++){
+   p[d]=min[d]+s;
+   for(let j=0;j<dv;j++)for(let i=0;i<du;i++){p[u]=min[u]+i;p[v]=min[v]+j;const m=at(p[0],p[1],p[2]);let open=false;if(m){p[d]+=sign;open=!at(p[0],p[1],p[2]);p[d]-=sign;}mask[i+j*du]=open?m:0;}
+   const plane=min[d]+s+(sign>0?1:0);
+   for(let j=0;j<dv;j++)for(let i=0;i<du;){
+    const m=mask[i+j*du];if(!m){i++;continue;}
+    let w=1;while(i+w<du&&w<limit&&mask[i+w+j*du]===m)w++;
+    let h=1;grow:while(j+h<dv&&h<limit){for(let k=0;k<w;k++)if(mask[i+k+(j+h)*du]!==m)break grow;h++;}
+    for(let b=0;b<h;b++)mask.fill(0,i+(j+b)*du,i+w+(j+b)*du);
+    const corner=(a,b)=>{const q=[0,0,0];q[d]=plane;q[u]=min[u]+a;q[v]=min[v]+b;return q;},normal=[0,0,0];normal[d]=sign;
+    faces.push({pts:[corner(i,j),corner(i+w,j),corner(i+w,j+h),corner(i,j+h)],normal,material:m});
+    i+=w;
+   }
+  }
+ }
+ return faces;
 }
 
-const bridgeEl=id=>document.getElementById(id),bridgeView=createRoof3D(bridgeEl('ravine'),()=>{});let ravineModel;
-function showRavine(){if(!bridgeEl('ravine').getBoundingClientRect().width)return;if(!ravineModel)ravineModel=createRavine();bridgeView.update(ravineModel,36,{grid:false,groupColors:{rock:'#777777','rock-light':'#92928c','rock-dark':'#5a5b5c',strata:'#807c72',grass:'#687458',soil:'#786550',gravel:'#929084',riverbed:'#484848',water:'#5d7c92'}});}
+// GPU view for large block terrain: one draw call with a depth buffer, so merged faces need no sorting.
+// Block outlines and a slight per-block tint come from the fragment shader, keeping the block look
+// without one polygon per block. Same camera model and API as createRoof3D, which is the fallback.
+const vertexSource=`attribute vec3 aPos;attribute vec3 aColor;attribute vec3 aNormal;
+uniform vec3 uCenter;uniform vec4 uRot;uniform vec2 uScale;uniform vec2 uShift;uniform float uDepth;
+varying vec3 vColor;varying vec3 vPos;varying vec3 vNormal;
+void main(){vec3 p=aPos-uCenter;float xx=uRot.y*p.x+uRot.x*p.z,zz=uRot.x*p.x-uRot.y*p.z;
+gl_Position=vec4(xx*uScale.x+uShift.x,(uRot.w*p.y-uRot.z*zz)*uScale.y+uShift.y,-(uRot.w*zz+uRot.z*p.y)*uDepth,1.);
+vColor=aColor;vPos=aPos;vNormal=aNormal;}`;
+const fragmentSource=derivatives=>`${derivatives?'#extension GL_OES_standard_derivatives : enable\n':''}#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+varying vec3 vColor;varying vec3 vPos;varying vec3 vNormal;uniform float uPixel;uniform float uLines;
+float hash(vec3 p){return fract(sin(dot(p,vec3(12.9898,78.233,37.719)))*43758.5453);}
+void main(){vec3 n=abs(vNormal);vec2 uv=n.x>.5?vPos.yz:n.y>.5?vPos.xz:vPos.xy;
+vec2 w=max(${derivatives?'fwidth(uv)':'vec2(uPixel)'},vec2(1e-4)),g=abs(fract(uv-.5)-.5)/w;
+float line=(1.-clamp(min(g.x,g.y),0.,1.))*uLines;
+gl_FragColor=vec4(vColor*(.95+.08*hash(floor(vPos-vNormal*.5)))*(1.-.26*line),1.);}`;
+// A model is {mesh:[{pts,normal,material}], materials:[name], minX..maxZ, groundY}.
+function createTerrainView(canvas){
+ let gl=null;try{gl=canvas.getContext('webgl',{antialias:true,alpha:true,premultipliedAlpha:true});}catch{}
+ if(!gl)return canvasFallback(canvas);
+ let yaw=-.62,pitch=.38,zoom=1,offset=[0,0],drag=null,model=null,colorKey='',options={},frame=0,program=null,buffer=null,count=0,lost=false,uniforms={},attributes={};
+ function compile(type,source){const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s)??'Shader failed');return s;}
+ function init(){
+  const derivatives=!!gl.getExtension('OES_standard_derivatives');program=gl.createProgram();
+  gl.attachShader(program,compile(gl.VERTEX_SHADER,vertexSource));gl.attachShader(program,compile(gl.FRAGMENT_SHADER,fragmentSource(derivatives)));gl.linkProgram(program);
+  if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program)??'Program failed');
+  for(const name of ['uCenter','uRot','uScale','uShift','uDepth','uPixel','uLines'])uniforms[name]=gl.getUniformLocation(program,name);
+  for(const name of ['aPos','aColor','aNormal'])attributes[name]=gl.getAttribLocation(program,name);
+  buffer=gl.createBuffer();colorKey='';
+ }
+ // Interleaved position, lit colour and normal; two triangles per merged face.
+ function upload(){
+  const palette=options.groupColors??{},key=JSON.stringify(palette);if(!model||key===colorKey)return;colorKey=key;
+  const rgb=model.materials.map(name=>{const hex=palette[name]??'#888888';return [1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);});
+  const data=new Float32Array(model.mesh.length*6*9);let o=0;
+  for(const f of model.mesh){const [nx,ny,nz]=f.normal,light=.72+.24*Math.max(0,ny)+.12*Math.max(0,-nz)+.07*Math.max(0,-nx),c=rgb[f.material];
+   for(const k of [0,1,2,0,2,3]){const p=f.pts[k];data.set([p[0],p[1],p[2],c[0]*light,c[1]*light,c[2]*light,nx,ny,nz],o);o+=9;}}
+  count=model.mesh.length*6;gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,data,gl.STATIC_DRAW);
+ }
+ function draw(){
+  if(!model||lost||canvas.hidden)return;const rect=canvas.getBoundingClientRect(),w=rect.width,h=rect.height;if(!w||!h)return;
+  const dpr=Math.min(devicePixelRatio||1,2),W=Math.round(w*dpr),H=Math.round(h*dpr);if(canvas.width!==W||canvas.height!==H){canvas.width=W;canvas.height=H;}
+  upload();gl.viewport(0,0,W,H);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);
+  const low=Math.min(model.minY,model.groundY??model.minY),cx=(model.minX+model.maxX)/2,cy=(low+model.maxY)/2,cz=(model.minZ+model.maxZ)/2;
+  const radius=Math.hypot(model.maxX-model.minX,model.maxY-low,model.maxZ-model.minZ)/2,scale=Math.min(w,h)/(radius*2.35)*zoom;
+  gl.useProgram(program);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+  [['aPos',0],['aColor',3],['aNormal',6]].forEach(([name,at])=>{gl.enableVertexAttribArray(attributes[name]);gl.vertexAttribPointer(attributes[name],3,gl.FLOAT,false,36,at*4);});
+  gl.uniform3f(uniforms.uCenter,cx,cy,cz);gl.uniform4f(uniforms.uRot,Math.sin(yaw),Math.cos(yaw),Math.sin(pitch),Math.cos(pitch));
+  gl.uniform2f(uniforms.uScale,2*scale/w,2*scale/h);gl.uniform2f(uniforms.uShift,2*offset[0]/w,-2*offset[1]/h);gl.uniform1f(uniforms.uDepth,1/(radius*1.05));
+  // Outlines fade out once a block is only a few pixels wide.
+  gl.uniform1f(uniforms.uPixel,1/(scale*dpr));gl.uniform1f(uniforms.uLines,Math.max(0,Math.min(1,(scale-3)/6)));
+  gl.drawArrays(gl.TRIANGLES,0,count);
+  Object.assign(canvas.dataset,{renderer:'webgl',faces:String(model.mesh.length),yaw:String(yaw),pitch:String(pitch)});
+ }
+ function schedule(){cancelAnimationFrame(frame);frame=requestAnimationFrame(draw);}
+ try{init();}catch{return canvasFallback(canvas,true);}
+ canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();lost=true;});
+ canvas.addEventListener('webglcontextrestored',()=>{lost=false;init();schedule();});
+ canvas.oncontextmenu=e=>e.preventDefault();
+ canvas.onpointerdown=e=>{drag={x:e.clientX,y:e.clientY,yaw,pitch,offset:[...offset],pan:e.shiftKey||e.button===2};canvas.setPointerCapture(e.pointerId);e.preventDefault();};
+ canvas.onpointermove=e=>{if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(drag.pan)offset=[drag.offset[0]+dx,drag.offset[1]+dy];else{yaw=drag.yaw+dx*.008;pitch=Math.max(-1.5,Math.min(1.5,drag.pitch+dy*.008));}schedule();};
+ canvas.onpointerup=canvas.onpointercancel=e=>{drag=null;if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);};
+ canvas.addEventListener('wheel',e=>{e.preventDefault();zoom=Math.max(.3,Math.min(12,zoom*Math.exp(-e.deltaY*.001)));schedule();},{passive:false});
+ canvas.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();yaw+=e.key==='ArrowLeft'?-.12:e.key==='ArrowRight'?.12:0;pitch=Math.max(-1.5,Math.min(1.5,pitch+(e.key==='ArrowUp'?.12:e.key==='ArrowDown'?-.12:0)));schedule();};
+ return {renderer:'webgl',getState:()=>({yaw,pitch,zoom,offset:[...offset]}),setState(s){({yaw,pitch,zoom}=s);offset=[...s.offset];schedule();},
+  update(m,_depth,o={}){if(m!==model){model=m;colorKey='';}options=o;schedule();},
+  zoom(f){zoom=Math.max(.3,Math.min(12,zoom*f));schedule();},fit(){zoom=1;offset=[0,0];schedule();},preset(name){({yaw,pitch,zoom,offset}=cameraPreset(name));schedule();}};
+}
+// Without WebGL, the Canvas 2D roof view draws the same terrain from smaller faces (painter's sorting needs them).
+function canvasFallback(canvas,usedWebGL=false){
+ // A canvas that already handed out a WebGL context cannot switch to 2D, so swap in a fresh one.
+ if(usedWebGL){const fresh=canvas.cloneNode(false);canvas.replaceWith(fresh);canvas=fresh;}
+ const view=createRoof3D(canvas,()=>{});let source=null,adapted=null;
+ return {...view,renderer:'canvas',update(m,depth,o){if(m!==source){source=m;adapted=m&&{...m,blocks:m.materials.map(group=>({group,type:'block'})),mesh:(m.meshWith?.(2)??m.mesh).map(f=>({...f,id:f.material,z:f.pts[0][2]}))};}view.update(adapted,depth,o);}};
+}
+
+const bridgeEl=id=>document.getElementById(id),bridgeView=createTerrainView(bridgeEl('ravine'));let ravineModel;
+const ravineColors={rock:'#777777','rock-light':'#92928c','rock-dark':'#5a5b5c',strata:'#807c72',grass:'#687458',soil:'#786550',gravel:'#929084',riverbed:'#484848',water:'#5d7c92'};
+// The terrain is built once, the first time the Bridge workspace is visible.
+function showRavine(){if(!bridgeEl('ravine').getBoundingClientRect().width)return;if(!ravineModel)ravineModel=createRavine();bridgeView.update(ravineModel,36,{grid:false,groupColors:ravineColors});}
 bridgeEl('perspective').onclick=()=>bridgeView.preset('outside');bridgeEl('front').onclick=()=>bridgeView.preset('front');bridgeEl('top').onclick=()=>bridgeView.preset('top');bridgeEl('minus').onclick=()=>bridgeView.zoom(1/1.3);bridgeEl('plus').onclick=()=>bridgeView.zoom(1.3);bridgeEl('fit').onclick=()=>bridgeView.fit();
 new ResizeObserver(showRavine).observe(document.querySelector('main'));showRavine();
 globalThis.bridgeState={capture:()=>({camera:bridgeView.getState()}),restore:s=>bridgeView.setState(s.camera)};
